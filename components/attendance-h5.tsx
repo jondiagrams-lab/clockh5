@@ -246,6 +246,11 @@ export function AttendanceH5() {
   return <main className="h5-shell">
     <div className="phone-frame">
       <StatusBar time={currentTime} />
+      <header className="p0-app-header">
+        <span className="p0-app-back" aria-hidden="true"><ChevronLeft size={20} strokeWidth={1.8} /></span>
+        <h1>考勤打卡（天宇正清）</h1>
+        <span aria-hidden="true" />
+      </header>
       {activeTab === "打卡" && <HomeScreen
         today={today}
         currentTime={currentTime}
