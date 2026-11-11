@@ -1,28 +1,31 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   AlertCircle,
   ArrowRight,
   BriefcaseBusiness,
   CalendarDays,
   Check,
+  ClipboardList,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
   Clock3,
   FileText,
+  FileSpreadsheet,
   Fingerprint,
-  Home,
   MapPin,
   Plane,
+  RefreshCw,
   ShieldCheck,
+  Table2,
   UserRound,
   Wifi,
   X,
 } from "lucide-react"
 
-type Tab = "首页" | "考勤" | "申请" | "我的"
+type Tab = "打卡" | "日历" | "功能清单" | "WPS表格" | "申请" | "我的"
 type ViewMode = "日" | "周" | "月"
 type ApplicationKind = "补卡申请" | "请假申请" | "出差申请" | "外出申请" | "加班申请"
 type ApplicationStatus = "审批中" | "已通过" | "已拒绝"
@@ -52,9 +55,9 @@ const employee = {
   company: "澄海科技有限公司",
   department: "产品设计部",
   role: "产品设计师",
-  project: "滨江智慧园一期",
-  site: "滨江项目部",
-  address: "杭州市滨江区江南大道 588 号",
+  project: "高新科技园",
+  site: "集团总部大厦（A座）",
+  address: "深圳市南山区科技中一路18号",
 }
 
 const schedule = {
@@ -65,15 +68,31 @@ const schedule = {
   breakEnd: "13:00",
   startWindow: "08:30–09:30",
   endWindow: "17:30–19:30",
+  flexibleMinutes: 30,
 }
 
-const locationFixture = { distance: 32, accuracy: 12, radius: 100 }
+const locationFixture = { distance: 38, accuracy: 12, radius: 100 }
 
-const navItems: { label: Tab; icon: typeof Home }[] = [
-  { label: "首页", icon: Home },
-  { label: "考勤", icon: CalendarDays },
-  { label: "申请", icon: FileText },
-  { label: "我的", icon: UserRound },
+const attendanceSites = [
+  { name: "高新科技园·集团总部大厦（A座）", project: "高新科技园", site: "集团总部大厦（A座）", address: "深圳市南山区科技中一路18号", distance: 38 },
+  { name: "高新科技园·创新中心（B座）", project: "高新科技园", site: "创新中心（B座）", address: "深圳市南山区科技中一路22号", distance: 64 },
+  { name: "科技园·研发中心（C座）", project: "科技园", site: "研发中心（C座）", address: "深圳市南山区科苑南路66号", distance: 128 },
+]
+
+ type PunchRecord = { id: string; kind: "上班打卡" | "下班打卡"; time: string; status: "正常" | "早退" | "迟到" }
+
+const initialPunchRecords: PunchRecord[] = [
+  { id: "punch-115120", kind: "下班打卡", time: "11:51:20", status: "早退" },
+  { id: "punch-115116", kind: "下班打卡", time: "11:51:16", status: "早退" },
+  { id: "punch-085214", kind: "上班打卡", time: "08:52:14", status: "正常" },
+]
+
+const navItems: { label: Exclude<Tab, "我的">; icon: typeof Clock3 }[] = [
+  { label: "打卡", icon: Clock3 },
+  { label: "日历", icon: CalendarDays },
+  { label: "功能清单", icon: ClipboardList },
+  { label: "WPS表格", icon: Table2 },
+  { label: "申请", icon: UserRound },
 ]
 
 const requestItems: { kind: ApplicationKind; icon: typeof Clock3; hint: string }[] = [
@@ -85,7 +104,11 @@ const requestItems: { kind: ApplicationKind; icon: typeof Clock3; hint: string }
 ]
 
 const localISO = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-const todayISO = () => localISO(new Date())
+const todayISO = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ""
+  return `${value("year")}-${value("month")}-${value("day")}`
+}
 const parseISODate = (value: string) => {
   const [year, month, day] = value.split("-").map(Number)
   return new Date(year, month - 1, day)
@@ -149,13 +172,17 @@ function summarize(records: AttendanceRecord[]) {
 
 export function AttendanceH5() {
   const today = todayISO()
-  const [activeTab, setActiveTab] = useState<Tab>("首页")
+  const [activeTab, setActiveTab] = useState<Tab>("打卡")
   const [loginOpen, setLoginOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
+  const [siteOpen, setSiteOpen] = useState(false)
   const [formOpen, setFormOpen] = useState<ApplicationKind | null>(null)
   const [notice, setNotice] = useState("")
-  const [punchedOut, setPunchedOut] = useState(false)
+  const [punchedOut, setPunchedOut] = useState(true)
+  const [punchRecords, setPunchRecords] = useState(initialPunchRecords)
+  const [currentTime, setCurrentTime] = useState("14:22:08")
+  const [selectedSite, setSelectedSite] = useState(attendanceSites[0])
   const [attendanceMode, setAttendanceMode] = useState<ViewMode>("日")
   const [selectedDate, setSelectedDate] = useState(today)
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -165,6 +192,13 @@ export function AttendanceH5() {
   const [applicationFilter, setApplicationFilter] = useState("全部")
   const [applications, setApplications] = useState(() => createApplicationRecords(today))
   const [distance, setDistance] = useState(locationFixture.distance)
+
+  useEffect(() => {
+    const updateTime = () => setCurrentTime(new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date()))
+    updateTime()
+    const interval = window.setInterval(updateTime, 1000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   const showNotice = (message: string) => {
     setNotice(message)
@@ -184,9 +218,11 @@ export function AttendanceH5() {
       showNotice("当前位置超出考勤范围，请重新定位")
       return
     }
+    const time = currentTime
+    setPunchRecords((current) => [{ id: `punch-${Date.now()}`, kind: "下班打卡", time, status: time < schedule.end ? "早退" : "正常" }, ...current])
     setPunchedOut(true)
     setLocationOpen(false)
-    showNotice("下班打卡成功 · 17:42")
+    showNotice(`下班卡已更新 · ${time}`)
   }
 
   const submitApplication = (kind: ApplicationKind, date: string, detail: string, reason: string) => {
@@ -199,23 +235,26 @@ export function AttendanceH5() {
 
   return <main className="h5-shell">
     <div className="phone-frame">
-      <StatusBar />
-      <header className="topbar">
+      <StatusBar time={currentTime} />
+      {activeTab !== "打卡" && <header className="topbar">
         <Brand />
-        <button className="p0-user-entry" onClick={() => setLoginOpen(true)}><UserRound size={15} /><span>账号</span><ChevronRight size={14} /></button>
-      </header>
+        <button className="p0-user-entry" onClick={() => setActiveTab("我的")}><UserRound size={15} /><span>{employee.name}</span><ChevronRight size={14} /></button>
+      </header>}
 
-      {activeTab === "首页" && <HomeScreen
+      {activeTab === "打卡" && <HomeScreen
         today={today}
-        pendingApplications={applications.filter((item) => item.status === "审批中")}
+        currentTime={currentTime}
+        punchRecords={punchRecords}
         distance={distance}
+        selectedSite={selectedSite}
         punchedOut={punchedOut}
         onPunch={() => setLocationOpen(true)}
-        onRules={() => setRulesOpen(true)}
+        onRefreshLocation={() => setDistance((current) => current <= locationFixture.radius ? 128 : selectedSite.distance)}
+        onFieldPunch={() => openRequest("外出申请")}
+        onSwitchSite={() => setSiteOpen(true)}
         onTab={setActiveTab}
-        onRequest={openRequest}
       />}
-      {activeTab === "考勤" && <AttendanceScreen
+      {activeTab === "日历" && <AttendanceScreen
         mode={attendanceMode}
         setMode={setAttendanceMode}
         today={today}
@@ -226,8 +265,10 @@ export function AttendanceH5() {
         onMonthChange={setVisibleMonth}
         onRequest={() => openRequest("补卡申请")}
       />}
+      {activeTab === "功能清单" && <FeaturesScreen onTab={setActiveTab} onRequest={openRequest} onRules={() => setRulesOpen(true)} />}
+      {activeTab === "WPS表格" && <WpsTableScreen today={today} records={punchRecords} />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
-      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} />}
+      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} />}
 
       <nav className="bottom-nav" aria-label="主导航">
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={activeTab === label ? "nav-active" : ""} aria-current={activeTab === label ? "page" : undefined} onClick={() => setActiveTab(label)}>
@@ -237,7 +278,8 @@ export function AttendanceH5() {
 
       {loginOpen && <LoginSheet onClose={() => setLoginOpen(false)} />}
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
-      {locationOpen && <LocationSheet distance={distance} onRefresh={() => setDistance((current) => current === 32 ? 128 : 32)} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
+      {locationOpen && <LocationSheet site={selectedSite} distance={distance} onRefresh={() => setDistance((current) => current <= locationFixture.radius ? 128 : selectedSite.distance)} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
+      {siteOpen && <SiteSheet selectedSite={selectedSite.name} onClose={() => setSiteOpen(false)} onSelect={(site) => { setSelectedSite(site); setDistance(site.distance); setSiteOpen(false); showNotice(`已切换至${site.site}`) }} />}
       {formOpen && <ApplicationSheet kind={formOpen} today={today} onClose={() => setFormOpen(null)} onSubmit={submitApplication} />}
       {notice && <div className="p0-toast" role="status">{notice}</div>}
     </div>
@@ -245,51 +287,61 @@ export function AttendanceH5() {
   </main>
 }
 
-function StatusBar() {
-  return <div className="status-bar"><span>17:42</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
+function StatusBar({ time }: { time: string }) {
+  return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
 function Brand() {
   return <><div className="brand-mark"><Fingerprint size={20} /></div><div className="brand-copy"><strong>考勤助手</strong><span>员工服务</span></div></>
 }
 
-function HomeScreen({ today, pendingApplications, distance, punchedOut, onPunch, onRules, onTab, onRequest }: {
+function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onTab }: {
   today: string
-  pendingApplications: ApplicationRecord[]
+  currentTime: string
+  punchRecords: PunchRecord[]
   distance: number
+  selectedSite: (typeof attendanceSites)[number]
   punchedOut: boolean
   onPunch: () => void
-  onRules: () => void
+  onRefreshLocation: () => void
+  onFieldPunch: () => void
+  onSwitchSite: () => void
   onTab: (tab: Tab) => void
-  onRequest: (kind: ApplicationKind) => void
 }) {
   const record = createAttendanceRecord(today, today, punchedOut)
-  return <section className="page-content">
-    <div className="welcome-row"><div><p className="eyebrow">{dateLabel(today)}</p><h1>下午好，{employee.name}</h1><p className="subtle">下班打卡窗口已开放，记得确认考勤地点</p></div><div className="avatar">林</div></div>
-
-    <section className="p0-card p0-profile-card p0-home-profile"><div className="avatar">林</div><div><strong>{employee.name} <span className="active-pill">在职</span></strong><span>{employee.department} · {employee.role}</span><small>{employee.company} · {employee.employeeId}</small></div><ChevronRight size={16} /></section>
-
-    <section className="p0-card p0-shift">
-      <div className="p0-card-head"><div><p className="eyebrow">TODAY&apos;S SHIFT</p><h2>{schedule.name}</h2></div><span className={`p0-status ${record.status === "正常" ? "p0-status-success" : ""}`}>{record.status}</span></div>
-      {record.isWorkingDay ? <>
-        <div className="p0-shift-times"><div><span>上班应打</span><strong>{schedule.start}</strong><small>{record.startTime ? `已打卡 · ${record.startTime}` : "待打卡"}</small></div><i /><div><span>下班应打</span><strong>{schedule.end}</strong><small>{record.endTime ? `已打卡 · ${record.endTime}` : `待打卡 · 窗口 ${schedule.endWindow}`}</small></div></div>
-        <div className="p0-rule-note"><Clock3 size={15} />打卡时间窗：上班 {schedule.startWindow} · 下班 {schedule.endWindow}</div>
-      </> : <div className="p0-empty p0-rest-day"><CalendarDays size={20} /><strong>今日休息</strong><span>无需打卡</span></div>}
+  return <section className="page-content p0-checkin-home">
+    <section className="p0-card p0-clock-card">
+      <div className="p0-home-sync"><span><i />北京时间 · 实时更新</span><time dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric" })} {dateLabel(today, { weekday: "short" })}</time></div>
+      <time className="p0-live-time">{currentTime}</time>
+      <p className="p0-work-meta">班次时间：{schedule.start}–{schedule.end}<i />标准工时 {schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
+      <div className="p0-home-site">
+        <span className="p0-site-icon"><MapPin size={17} /></span>
+        <div><strong>{selectedSite.name}</strong><span>{selectedSite.address}</span></div>
+        <span className={`p0-location-state ${distance > locationFixture.radius ? "is-outside" : ""}`}>{distance <= locationFixture.radius ? `范围内 ${distance}m` : `超出 ${distance}m`}</span>
+        <button type="button" aria-label="刷新定位" title="刷新定位" onClick={onRefreshLocation}><RefreshCw size={15} /></button>
+      </div>
     </section>
 
-    <section className="p0-card p0-current-location">
-      <div className="p0-location-top"><span className="p0-site-icon"><MapPin size={18} /></span><div><span>本次打卡项目 / 固定驻地</span><strong>{employee.project} · {employee.site}</strong></div><span className={`p0-location-state ${distance > locationFixture.radius ? "is-outside" : ""}`}>{distance <= locationFixture.radius ? "范围内" : "超出范围"}</span></div>
-      <p className="p0-location-address">{employee.address}</p>
-      <div className="p0-location-metrics"><span>定位成功 · 精度 {locationFixture.accuracy} 米</span><strong>距考勤点 {distance}m</strong><span>有效范围 {locationFixture.radius}m</span></div>
+    <section className="p0-card p0-main-punch-card">
+      <div className="p0-punch-status"><i />今日打卡已完成 · 可更新下班卡</div>
+      <button className="p0-punch-orb" disabled={!record.isWorkingDay} aria-label="更新下班卡" onClick={onPunch}>
+        <ShieldCheck size={24} strokeWidth={1.8} /><strong>更新下班卡</strong><span>{currentTime}</span>
+      </button>
+      <p className="p0-punch-hint">可随时更新最终下班时间</p>
+      <div className="p0-home-actions">
+        <button type="button" onClick={onFieldPunch}><MapPin size={14} />外勤打卡</button>
+        <button type="button" onClick={onSwitchSite}><MapPin size={14} />切换考勤点</button>
+      </div>
     </section>
 
-    <button className="p0-punch" disabled={!record.isWorkingDay || punchedOut} onClick={onPunch}><Fingerprint size={22} /><span>{!record.isWorkingDay ? "今日休息" : punchedOut ? "今日打卡已完成" : "下班打卡"}<small>{!record.isWorkingDay ? "休息日无需打卡" : punchedOut ? "上班 08:56 · 下班 17:42" : distance <= locationFixture.radius ? "定位成功 · 位于考勤范围内" : "当前位置已超出考勤范围"}</small></span><ChevronRight size={19} /></button>
-
-    <div className="p0-actions-title"><h2>常用服务</h2><button className="p0-inline-link" onClick={() => onTab("申请")}>申请进度 <ChevronRight size={14} /></button></div>
-    <div className="p0-request-grid">{requestItems.slice(0, 4).map(({ kind, icon: Icon, hint }) => <button key={kind} onClick={() => onRequest(kind)}><span><Icon size={17} /></span><strong>{kind.replace("申请", "")}</strong><small>{hint}</small></button>)}</div>
-
-    {pendingApplications.length > 0 && <section className="p0-card p0-pending-summary"><div><strong>有 {pendingApplications.length} 条申请正在审批</strong><span>{pendingApplications.slice(0, 2).map((item) => `${item.kind} · ${dateLabel(item.date, { month: "numeric", day: "numeric" })}`).join("　")}</span></div><button className="p0-inline-link" onClick={() => onTab("申请")}>查看申请 <ChevronRight size={14} /></button></section>}
-    <button className="p0-attendance-entry" onClick={() => onTab("考勤")}><CalendarDays size={18} /><span><strong>考勤记录</strong><small>查看每日打卡明细和月度统计</small></span><ChevronRight size={17} /></button>
+    <section className="p0-card p0-home-records">
+      <div className="p0-records-heading"><h2>今日打卡记录</h2><span>共 {punchRecords.length} 条记录</span></div>
+      <div className="p0-home-record-list">{punchRecords.slice(0, 4).map((item) => <article className="p0-home-record" key={item.id}>
+        <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : ""}`}>{item.kind === "上班打卡" ? "上" : "下"}</span>
+        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{selectedSite.name}</span></div>
+        <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
+      </article>)}</div>
+    </section>
   </section>
 }
 
@@ -380,6 +432,46 @@ function statusClass(status: AttendanceStatus) {
   return ""
 }
 
+function FeaturesScreen({ onTab, onRequest, onRules }: { onTab: (tab: Tab) => void; onRequest: (kind: ApplicationKind) => void; onRules: () => void }) {
+  return <section className="page-content subpage p0-features-page"><p className="eyebrow">WORKSPACE</p><h1>功能清单</h1><p className="p0-page-description">常用考勤服务与工作工具</p>
+    <div className="p0-feature-grid">
+      <button className="p0-feature-card" onClick={() => onTab("日历")}><span><CalendarDays size={19} /></span><strong>考勤日历</strong><small>查看日、周、月出勤统计</small><ChevronRight size={15} /></button>
+      <button className="p0-feature-card" onClick={() => onTab("WPS表格")}><span><Table2 size={19} /></span><strong>考勤表格</strong><small>预览并导出 WPS 兼容表格</small><ChevronRight size={15} /></button>
+      {requestItems.map(({ kind, icon: Icon, hint }) => <button className="p0-feature-card" key={kind} onClick={() => onRequest(kind)}><span><Icon size={19} /></span><strong>{kind}</strong><small>{hint}</small><ChevronRight size={15} /></button>)}
+      <button className="p0-feature-card" onClick={onRules}><span><ShieldCheck size={19} /></span><strong>打卡规则</strong><small>查看班次、时间窗和围栏范围</small><ChevronRight size={15} /></button>
+    </div>
+  </section>
+}
+
+function WpsTableScreen({ today, records }: { today: string; records: PunchRecord[] }) {
+  const [exported, setExported] = useState(false)
+  const exportCsv = () => {
+    const rows = [["日期", "打卡类型", "打卡时间", "考勤结果"], ...records.map((record) => [today, record.kind, record.time, record.status])]
+    const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `考勤记录_${today}.csv`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setExported(true)
+  }
+  return <section className="page-content subpage p0-wps-page"><p className="eyebrow">ATTENDANCE SHEET</p><h1>WPS表格</h1>
+    <section className="p0-card p0-wps-summary"><span><FileSpreadsheet size={20} /></span><div><strong>{formatMonth(parseISODate(today))}考勤记录</strong><small>{records.length} 条打卡记录 · WPS 兼容 CSV</small></div><span className="p0-sheet-ready">可导出</span></section>
+    <section className="p0-card p0-wps-table-card"><div className="p0-period-head"><div><p className="eyebrow">TODAY&apos;S RECORDS</p><h2>{dateLabel(today, { month: "long", day: "numeric" })}</h2></div><span>{records.length} 条记录</span></div>
+      <div className="p0-table-wrap"><table><caption className="sr-only">今日考勤记录表</caption><thead><tr><th scope="col">打卡类型</th><th scope="col">时间</th><th scope="col">结果</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.kind}</td><td>{record.time}</td><td><span className={`p0-home-record-status ${record.status === "正常" ? "is-normal" : "is-exception"}`}>{record.status}</span></td></tr>)}</tbody></table></div>
+    </section>
+    <button className="p0-primary p0-export-button" onClick={exportCsv}><FileSpreadsheet size={17} />导出表格（CSV）<ArrowRight size={15} /></button>
+    {exported && <p className="p0-export-note" role="status"><Check size={14} />已生成可用 WPS 打开的 CSV 文件</p>}
+  </section>
+}
+
+function SiteSheet({ selectedSite, onClose, onSelect }: { selectedSite: string; onClose: () => void; onSelect: (site: (typeof attendanceSites)[number]) => void }) {
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-site-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-site-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">ATTENDANCE SITE</p><h2 id="p0-site-title">切换考勤点</h2><p className="p0-sheet-description">选择本次打卡使用的考勤地点。</p>
+    <div className="p0-site-options">{attendanceSites.map((site) => <button key={site.name} aria-pressed={selectedSite === site.name} className={selectedSite === site.name ? "is-selected" : ""} onClick={() => onSelect(site)}><MapPin size={16} /><span><strong>{site.name}</strong><small>{site.address} · {site.distance}m</small></span>{selectedSite === site.name && <Check size={17} />}</button>)}</div>
+  </section></div>
+}
+
 function ApplicationsScreen({ items, filter, setFilter, onRequest }: { items: ApplicationRecord[]; filter: string; setFilter: (value: string) => void; onRequest: (kind: ApplicationKind) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   return <section className="page-content subpage"><p className="eyebrow">MY REQUESTS</p><h1>我的申请</h1>
@@ -394,10 +486,10 @@ function ApplicationsScreen({ items, filter, setFilter, onRequest }: { items: Ap
   </section>
 }
 
-function ProfileScreen({ onRules }: { onRules: () => void }) {
+function ProfileScreen({ onRules, onLogin }: { onRules: () => void; onLogin: () => void }) {
   return <section className="page-content subpage"><p className="eyebrow">MY PROFILE</p><h1>个人中心</h1>
     <section className="p0-profile-card"><div className="avatar">林</div><div><strong>{employee.name}</strong><span>{employee.department} · {employee.role}</span></div><span className="active-pill">在职</span></section>
-    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button></div>
+    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><button onClick={onLogin}>切换账号<ChevronRight size={17} /></button></div>
     <div className="p0-card p0-privacy-card"><ShieldCheck size={18} /><div><strong>位置权限说明</strong><span>仅在发起打卡时获取当前定位，并用于校验有效考勤范围。</span></div></div>
   </section>
 }
@@ -411,14 +503,14 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
   </section></div>
 }
 
-function LocationSheet({ distance, onRefresh, onClose, onSubmit }: { distance: number; onRefresh: () => void; onClose: () => void; onSubmit: () => void }) {
+function LocationSheet({ site, distance, onRefresh, onClose, onSubmit }: { site: (typeof attendanceSites)[number]; distance: number; onRefresh: () => void; onClose: () => void; onSubmit: () => void }) {
   const isWithinRange = distance <= locationFixture.radius
   return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-location-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">LOCATION CHECK</p><h2 id="p0-location-title">确认打卡位置</h2><p className="p0-sheet-description">请确认当前定位与考勤地点一致，打卡时间将以服务器记录为准。</p>
-    <div className="p0-location-status"><MapPin size={18} /><div><strong>{employee.site}</strong><span>{employee.address}</span></div><span className={`p0-location-state ${isWithinRange ? "" : "is-outside"}`}>{isWithinRange ? "范围内" : "超出范围"}</span></div>
+    <div className="p0-location-status"><MapPin size={18} /><div><strong>{site.site}</strong><span>{site.address}</span></div><span className={`p0-location-state ${isWithinRange ? "" : "is-outside"}`}>{isWithinRange ? "范围内" : "超出范围"}</span></div>
     <div className="p0-location-metrics p0-sheet-metrics"><span>定位成功 · 精度 {locationFixture.accuracy} 米</span><strong>距考勤点 {distance}m</strong><span>考勤范围 {locationFixture.radius}m</span></div>
     <button className="p0-inline-link p0-refresh-location" onClick={onRefresh}>刷新定位 <ArrowRight size={15} /></button>
     {!isWithinRange && <div className="p0-rule-warning"><CircleAlert size={15} />当前位置距离考勤点 {distance}m，超出 {locationFixture.radius}m 有效范围。</div>}
-    <button className="p0-primary p0-submit-punch" onClick={onSubmit} disabled={!isWithinRange}>{isWithinRange ? "确认下班打卡" : "当前无法打卡"} <Check size={17} /></button><p className="p0-disclaimer">提交后生成当日下班考勤记录。</p>
+    <button className="p0-primary p0-submit-punch" onClick={onSubmit} disabled={!isWithinRange}>{isWithinRange ? "确认更新下班卡" : "当前无法打卡"} <Check size={17} /></button><p className="p0-disclaimer">提交后更新当日下班考勤记录。</p>
   </section></div>
 }
 
