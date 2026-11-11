@@ -97,6 +97,7 @@ const requestItems: { kind: ApplicationKind; icon: typeof Clock3; hint: string }
   { kind: "请假申请", icon: CalendarDays, hint: "提交假期审批申请" },
   { kind: "出差申请", icon: Plane, hint: "登记出差安排" },
   { kind: "外出申请", icon: MapPin, hint: "提交工作外出申请" },
+  { kind: "补卡申请", icon: Clock3, hint: "补充遗漏的打卡记录" },
   { kind: "加班申请", icon: BriefcaseBusiness, hint: "提交加班审批申请" },
 ]
 
@@ -175,6 +176,8 @@ export function AttendanceH5() {
   const [locationOpen, setLocationOpen] = useState(false)
   const [siteOpen, setSiteOpen] = useState(false)
   const [formOpen, setFormOpen] = useState<ApplicationKind | null>(null)
+  const [formInitialDate, setFormInitialDate] = useState<string | undefined>()
+  const [exceptionRecord, setExceptionRecord] = useState<AttendanceRecord | null>(null)
   const [notice, setNotice] = useState("")
   const [punchedOut, setPunchedOut] = useState(true)
   const [punchRecords, setPunchRecords] = useState(initialPunchRecords)
@@ -202,7 +205,16 @@ export function AttendanceH5() {
     window.setTimeout(() => setNotice(""), 2600)
   }
 
-  const openRequest = (kind: ApplicationKind) => setFormOpen(kind)
+  const openRequest = (kind: ApplicationKind, initialDate?: string) => {
+    setFormInitialDate(initialDate)
+    setFormOpen(kind)
+  }
+  const openExceptionRequest = (kind: ApplicationKind) => {
+    if (!exceptionRecord) return
+    const requestDate = exceptionRecord.date
+    setExceptionRecord(null)
+    openRequest(kind, requestDate)
+  }
   const openDate = (date: string) => {
     setSelectedDate(date)
     const parsed = parseISODate(date)
@@ -225,6 +237,7 @@ export function AttendanceH5() {
   const submitApplication = (kind: ApplicationKind, date: string, detail: string, reason: string) => {
     setApplications((current) => [{ id: `REQ-${Date.now()}`, kind, date, detail, reason, status: "审批中" }, ...current])
     setFormOpen(null)
+    setFormInitialDate(undefined)
     setApplicationFilter("全部")
     setActiveTab("申请")
     showNotice("申请已提交，当前状态：审批中")
@@ -256,6 +269,7 @@ export function AttendanceH5() {
         onSelectDate={openDate}
         visibleMonth={visibleMonth}
         onMonthChange={setVisibleMonth}
+        onException={setExceptionRecord}
       />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
       {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} onApplications={() => setActiveTab("申请")} />}
@@ -270,7 +284,8 @@ export function AttendanceH5() {
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
       {locationOpen && <LocationSheet site={selectedSite} distance={distance} onRefresh={() => setDistance((current) => current <= locationFixture.radius ? 128 : selectedSite.distance)} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
       {siteOpen && <SiteSheet selectedSite={selectedSite.name} onClose={() => setSiteOpen(false)} onSelect={(site) => { setSelectedSite(site); setDistance(site.distance); setSiteOpen(false); showNotice(`已切换至${site.site}`) }} />}
-      {formOpen && <ApplicationSheet kind={formOpen} today={today} onClose={() => setFormOpen(null)} onSubmit={submitApplication} />}
+      {exceptionRecord && <ExceptionSheet record={exceptionRecord} onClose={() => setExceptionRecord(null)} onRequest={openExceptionRequest} />}
+      {formOpen && <ApplicationSheet kind={formOpen} today={today} initialDate={formInitialDate} onClose={() => { setFormOpen(null); setFormInitialDate(undefined) }} onSubmit={submitApplication} />}
       {notice && <div className="p0-toast" role="status">{notice}</div>}
     </div>
     <ProductNote />
@@ -334,7 +349,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
   </section>
 }
 
-function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSelectDate, visibleMonth, onMonthChange }: {
+function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSelectDate, visibleMonth, onMonthChange, onException }: {
   mode: ViewMode
   setMode: (value: ViewMode) => void
   today: string
@@ -343,6 +358,7 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
   onSelectDate: (value: string) => void
   visibleMonth: Date
   onMonthChange: (value: Date) => void
+  onException: (record: AttendanceRecord) => void
 }) {
   const weekDates = getWeekDates(selectedDate)
   const monthDates = getMonthGrid(visibleMonth)
@@ -370,7 +386,7 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
     {mode === "日" && <>
       <PeriodNavigator label={dateLabel(selectedDate)} onPrevious={() => onSelectDate(shiftDate(selectedDate, -1))} onNext={() => onSelectDate(shiftDate(selectedDate, 1))} onToday={() => onSelectDate(today)} />
       <SummaryGrid items={[{ label: "应打卡", value: selectedRecord.isWorkingDay ? "2" : "0", unit: "次" }, { label: "已打卡", value: String(punchCount), unit: "次" }, { label: "考勤结果", value: selectedRecord.status, unit: "" }]} />
-      <DailyAttendanceCard record={selectedRecord} />
+      <DailyAttendanceCard record={selectedRecord} onException={() => onException(selectedRecord)} />
     </>}
 
     {mode === "周" && <>
@@ -382,21 +398,32 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
     {mode === "月" && <>
       <PeriodNavigator label={monthLabel} onPrevious={() => selectMonth(-1)} onNext={() => selectMonth(1)} onToday={() => { const date = parseISODate(today); onMonthChange(new Date(date.getFullYear(), date.getMonth(), 1)); onSelectDate(today) }} />
       <SummaryGrid items={[{ label: "应出勤", value: String(monthSummary.expectedDays), unit: "天" }, { label: "实际出勤", value: String(monthSummary.attendedDays), unit: "天" }, { label: "迟到 / 早退", value: String(monthSummary.lateEarly), unit: "次" }, { label: "缺卡", value: String(monthSummary.missed), unit: "次" }]} />
-      <section className="p0-card p0-calendar-card"><div className="p0-period-head"><div><p className="eyebrow">MONTHLY OVERVIEW</p><h2>月度考勤</h2></div><span>{monthSummary.punched} 次打卡</span></div><div className="p0-calendar-grid p0-calendar-weekdays" aria-hidden="true">{"一二三四五六日".split("").map((day) => <span key={day}>{day}</span>)}</div><div className="p0-calendar-grid" role="group" aria-label={`${monthLabel}日期`}>{monthDates.map((date) => { const record = createAttendanceRecord(date, today, punchedOut); const inMonth = parseISODate(date).getMonth() === visibleMonth.getMonth(); return <button type="button" key={date} aria-label={`${date}，${record.status}`} aria-pressed={selectedDate === date} className={`${inMonth ? "" : "is-outside"} ${selectedDate === date ? "is-selected" : ""} ${date === today ? "is-today" : ""} ${statusClass(record.status)}`} onClick={() => onSelectDate(date)}><span>{parseISODate(date).getDate()}</span><i aria-hidden="true" /></button> })}</div><div className="p0-calendar-key"><span className="p0-calendar-key-dot status-normal" />正常 <span className="p0-calendar-key-dot status-exception" />异常 <span className="p0-calendar-key-dot status-rest" />休息日</div></section>
-      <DailyAttendanceCard record={selectedRecord} />
+      <section className="p0-card p0-calendar-card"><div className="p0-period-head"><div><p className="eyebrow">MONTHLY OVERVIEW</p><h2>月度考勤</h2></div><span>{monthSummary.punched} 次打卡</span></div><div className="p0-calendar-grid p0-calendar-weekdays" aria-hidden="true">{"一二三四五六日".split("").map((day) => <span key={day}>{day}</span>)}</div><div className="p0-calendar-grid" role="group" aria-label={`${monthLabel}日期`}>{monthDates.map((date) => { const record = createAttendanceRecord(date, today, punchedOut); const inMonth = parseISODate(date).getMonth() === visibleMonth.getMonth(); return <button type="button" key={date} aria-label={`${date}，${record.status}`} aria-pressed={selectedDate === date} className={`${inMonth ? "" : "is-outside"} ${selectedDate === date ? "is-selected" : ""} ${date === today ? "is-today" : ""} ${statusClass(record.status)}`} onClick={() => onSelectDate(date)}><span>{parseISODate(date).getDate()}</span>{record.status === "缺卡" ? <em className="p0-calendar-missed-label" aria-hidden="true">缺卡</em> : <i aria-hidden="true" />}</button> })}</div><div className="p0-calendar-key"><span className="p0-calendar-key-dot status-normal" />正常 <span className="p0-calendar-key-dot status-exception" />异常 <span className="p0-calendar-key-dot status-rest" />休息日</div></section>
+      <DailyAttendanceCard record={selectedRecord} onException={() => onException(selectedRecord)} />
     </>}
   </section>
 }
 
-function DailyAttendanceCard({ record }: { record: AttendanceRecord }) {
+function DailyAttendanceCard({ record, onException }: { record: AttendanceRecord; onException: () => void }) {
+  const hasException = record.status === "缺卡" || record.status === "迟到" || record.status === "早退"
   return <section className="p0-card p0-detail-card"><div className="p0-card-head"><div><p className="eyebrow">{record.date} · 本人考勤</p><h2>{record.isWorkingDay ? schedule.name : record.status}</h2></div><StatusPill status={record.status} /></div>
     {record.isWorkingDay && <>
-      <div className="p0-record-row"><span className="p0-record-icon"><Clock3 size={16} /></span><div><strong>上班打卡</strong><small>应打卡 {schedule.start} · 时段 {schedule.startWindow}</small></div><b>{record.startTime ?? (record.status === "未开始" ? "--:--" : "缺卡")}</b></div>
+      <div className="p0-record-row"><span className="p0-record-icon"><Clock3 size={16} /></span><div><strong>上班打卡</strong><small>应打卡 {schedule.start} · 时段 {schedule.startWindow}</small></div><b className={!record.startTime && record.status === "缺卡" ? "p0-missed-punch-value" : ""}>{record.startTime ?? (record.status === "未开始" ? "--:--" : "缺卡")}</b></div>
       <div className="p0-record-row"><span className="p0-record-icon p0-record-muted"><Clock3 size={16} /></span><div><strong>下班打卡</strong><small>应打卡 {schedule.end} · 时段 {schedule.endWindow}</small></div><b>{record.endTime ?? (record.status === "未开始" ? "--:--" : "待打卡")}</b></div>
       <div className="p0-result-row"><span>考勤结果</span><strong>{record.status}</strong></div>
+      {hasException && <button type="button" className="p0-exception-trigger" onClick={onException}><CircleAlert size={15} />异常处理<ChevronRight size={15} /></button>}
     </>}
     {!record.isWorkingDay && <div className="p0-empty p0-rest-day"><CalendarDays size={20} /><strong>{record.status === "休息日" ? "今日休息" : "班次尚未开始"}</strong><span>{record.status === "休息日" ? "无需打卡" : "该日期暂无排班"}</span></div>}
   </section>
+}
+
+function ExceptionSheet({ record, onClose, onRequest }: { record: AttendanceRecord; onClose: () => void; onRequest: (kind: ApplicationKind) => void }) {
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-exception-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-exception-title" onClick={(event) => event.stopPropagation()}>
+    <div className="sheet-handle" /><button className="sheet-close" type="button" onClick={onClose} aria-label="关闭"><X size={20} /></button>
+    <div className="sheet-icon"><CircleAlert size={22} /></div><p className="eyebrow">ATTENDANCE EXCEPTION</p><h2 id="p0-exception-title">异常处理</h2>
+    <p className="p0-sheet-description">{dateLabel(record.date)} · {record.status}，请选择处理方式。</p>
+    <div className="p0-request-grid p0-exception-actions" role="group" aria-label="异常处理入口">{requestItems.map(({ kind, icon: Icon, hint }) => <button key={kind} type="button" onClick={() => onRequest(kind)}><span><Icon size={18} /></span><strong>{kind.replace("申请", "")}</strong><small>{hint}</small></button>)}</div>
+  </section></div>
 }
 
 function PeriodNavigator({ label, onPrevious, onNext, onToday }: { label: string; onPrevious: () => void; onNext: () => void; onToday: () => void }) {
@@ -469,8 +496,8 @@ function LocationSheet({ site, distance, onRefresh, onClose, onSubmit }: { site:
   </section></div>
 }
 
-function ApplicationSheet({ kind, today, onClose, onSubmit }: { kind: ApplicationKind; today: string; onClose: () => void; onSubmit: (kind: ApplicationKind, date: string, detail: string, reason: string) => void }) {
-  const defaultDate = kind === "补卡申请" ? shiftDate(today, -1) : shiftDate(today, 1)
+function ApplicationSheet({ kind, today, initialDate, onClose, onSubmit }: { kind: ApplicationKind; today: string; initialDate?: string; onClose: () => void; onSubmit: (kind: ApplicationKind, date: string, detail: string, reason: string) => void }) {
+  const defaultDate = initialDate ?? (kind === "补卡申请" ? shiftDate(today, -1) : shiftDate(today, 1))
   const [startDate, setStartDate] = useState(defaultDate)
   const [endDate, setEndDate] = useState(defaultDate)
   const [startTime, setStartTime] = useState("09:00")
