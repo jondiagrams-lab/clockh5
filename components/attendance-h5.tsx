@@ -22,6 +22,7 @@ import {
   Wifi,
   X,
 } from "lucide-react"
+import { DatePickerField, OptionPickerField, TimePickerField } from "@/components/request-picker-fields"
 
 type Tab = "打卡" | "日历" | "申请" | "我的"
 type ViewMode = "日" | "周" | "月"
@@ -479,21 +480,87 @@ function LocationSheet({ site, distance, onRefresh, onClose, onSubmit }: { site:
 }
 
 function ApplicationSheet({ kind, today, onClose, onSubmit }: { kind: ApplicationKind; today: string; onClose: () => void; onSubmit: (kind: ApplicationKind, date: string, detail: string, reason: string) => void }) {
-  const [date, setDate] = useState(kind === "补卡申请" ? shiftDate(today, -1) : shiftDate(today, 1))
-  const [detail, setDetail] = useState(kind === "补卡申请" ? "上班打卡 · 09:00" : kind === "请假申请" ? "年假 · 1 天" : "工作安排 · 1 天")
+  const defaultDate = kind === "补卡申请" ? shiftDate(today, -1) : shiftDate(today, 1)
+  const [startDate, setStartDate] = useState(defaultDate)
+  const [endDate, setEndDate] = useState(defaultDate)
+  const [startTime, setStartTime] = useState("09:00")
+  const [endTime, setEndTime] = useState("18:00")
+  const [punchPeriod, setPunchPeriod] = useState("上班打卡")
+  const [leaveType, setLeaveType] = useState("年假")
+  const [leavePeriod, setLeavePeriod] = useState("全天")
+  const [destination, setDestination] = useState("")
   const [reason, setReason] = useState("")
   const [error, setError] = useState("")
+  const isBackfill = kind === "补卡申请"
+  const isLeave = kind === "请假申请"
+  const isTravel = kind === "出差申请"
+
+  const updateStartDate = (value: string) => {
+    setStartDate(value)
+    if (endDate < value) setEndDate(value)
+  }
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!reason.trim()) {
       setError("请填写申请原因")
       return
     }
-    onSubmit(kind, date, detail, reason.trim())
+    if (!isBackfill && endDate < startDate) {
+      setError("结束日期不能早于开始日期")
+      return
+    }
+    if (!isBackfill && !isLeave && endDate === startDate && endTime < startTime) {
+      setError("结束时间不能早于开始时间")
+      return
+    }
+    if (isTravel && !destination.trim()) {
+      setError("请填写出差地点")
+      return
+    }
+
+    const requestDate = isBackfill ? startDate : `${startDate} 至 ${endDate}`
+    const detail = isBackfill
+      ? `${punchPeriod} · ${startTime}`
+      : isLeave
+        ? `${leaveType} · ${leavePeriod}`
+        : isTravel
+          ? `${destination.trim()} · ${startTime}–${endTime}`
+          : `${startTime}–${endTime}`
+    onSubmit(kind, requestDate, detail, reason.trim())
   }
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-form-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-application-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><FileText size={22} /></div><p className="eyebrow">申请流程</p><h2 id="p0-application-title">{kind}</h2>
-    <div className="p0-approval-flow"><strong>两级审批流程</strong><ol>{["项目主管", "部门主管"].map((role, index) => <li className="p0-approval-step" key={role}><i>{index + 1}</i><span>{role}</span><small>审批人待配置</small></li>)}</ol><p className="p0-approval-note">按员工所属项目匹配项目主管，再由部门主管审批；当前仅展示角色占位。</p></div>
-    <form className="p0-application-form" onSubmit={handleSubmit}><label className="p0-form-field">申请日期<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label><label className="p0-form-field">申请时段 / 类型<input value={detail} onChange={(event) => setDetail(event.target.value)} required /></label><label className="p0-form-field">申请原因<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} placeholder="请填写申请原因" required /></label>{error && <span className="p0-form-error" role="alert">{error}</span>}<button className="p0-primary p0-submit-punch" type="submit">提交申请 <ArrowRight size={16} /></button></form>
+
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-form-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-application-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><FileText size={22} /></div><p className="eyebrow">申请信息</p><h2 id="p0-application-title">{kind}</h2>
+    <form className="p0-application-form" onSubmit={handleSubmit}>
+      <div className="p0-form-fields">
+        {isBackfill ? <>
+          <DatePickerField label="补卡日期" value={startDate} onChange={setStartDate} />
+          <div className="p0-form-row">
+            <OptionPickerField label="补卡时段" value={punchPeriod} onChange={setPunchPeriod} options={["上班打卡", "下班打卡"]} />
+            <TimePickerField label="补卡时间" value={startTime} onChange={setStartTime} />
+          </div>
+        </> : <>
+          <div className="p0-form-row">
+            <DatePickerField label={isTravel ? "出差开始日期" : isLeave ? "请假开始日期" : kind === "外出申请" ? "外出开始日期" : "加班开始日期"} value={startDate} onChange={updateStartDate} />
+            <DatePickerField label={isTravel ? "出差结束日期" : isLeave ? "请假结束日期" : kind === "外出申请" ? "外出结束日期" : "加班结束日期"} value={endDate} onChange={setEndDate} minDate={startDate} />
+          </div>
+          {isLeave ? <div className="p0-form-row">
+            <OptionPickerField label="假期类型" value={leaveType} onChange={setLeaveType} options={["年假", "调休", "病假", "事假"]} />
+            <OptionPickerField label="请假时段" value={leavePeriod} onChange={setLeavePeriod} options={["全天", "上午", "下午"]} />
+          </div> : <>
+            <div className="p0-form-row">
+              <TimePickerField label={isTravel ? "出发时间" : kind === "外出申请" ? "外出开始时间" : "加班开始时间"} value={startTime} onChange={setStartTime} />
+              <TimePickerField label={isTravel ? "返程时间" : kind === "外出申请" ? "外出结束时间" : "加班结束时间"} value={endTime} onChange={setEndTime} />
+            </div>
+            {isTravel && <label className="p0-form-field"><span>出差地点</span><input value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="请输入客户或出差地点" required /></label>}
+          </>}
+        </>}
+        <label className="p0-form-field"><span>申请原因</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} placeholder="请填写申请原因" required /></label>
+      </div>
+      <div className="p0-approval-flow"><strong>审批流程</strong><ol>{["项目主管", "部门主管"].map((role, index) => <li className="p0-approval-step" key={role}><i>{index + 1}</i><span>{role}</span><small>审批人待配置</small></li>)}</ol><p className="p0-approval-note">按员工所属项目匹配项目主管，再由部门主管审批。</p></div>
+      {error && <span className="p0-form-error" role="alert">{error}</span>}
+      <button className="p0-primary p0-submit-punch" type="submit">提交申请 <ArrowRight size={16} /></button>
+    </form>
   </section></div>
 }
 
