@@ -794,15 +794,18 @@ function ApplicationSheet({ kind, today, initialDate, onClose, onSubmit }: { kin
 }
 
 function RulesSheet({ onClose }: { onClose: () => void }) {
-  const rules = [
-    ["工作日班次", "09:00–18:00"],
-    ["上班打卡时段", "08:30–09:30"],
-    ["下班打卡时段", "17:30–19:30"],
-    ["考勤地点", employee.site],
-    ["有效定位范围", `${locationFixture.radius} 米`],
-    ["补卡申请期限", "缺卡后 3 日内"],
+  const rules: { label: string; values: string[] }[] = [
+    { label: "工作日班次", values: ["09:00–18:00"] },
+    { label: "上班打卡时段", values: ["08:30–09:30"] },
+    { label: "下班打卡时段", values: ["17:30–19:30"] },
+    {
+      label: "考勤地点",
+      values: attendanceSites.map((site) => `${site.site} · ${site.address}`),
+    },
+    { label: "有效定位范围", values: [`${locationFixture.radius} 米`] },
+    { label: "补卡申请期限", values: ["缺卡后 3 日内"] },
   ]
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-rules-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-rules-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><ShieldCheck size={22} /></div><p className="eyebrow">ATTENDANCE POLICY</p><h2 id="p0-rules-title">打卡规则</h2><p className="p0-sheet-description">适用于当前员工及项目的考勤安排。</p><div className="p0-rule-list">{rules.map(([label, value]) => <div className="p0-rule-row" key={label}><Clock3 size={15} /><div><strong>{label}</strong><span>{value}</span></div><ChevronRight size={15} /></div>)}</div><button className="p0-primary p0-submit-punch" onClick={onClose}>关闭</button></section></div>
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-rules-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-rules-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><ShieldCheck size={22} /></div><p className="eyebrow">ATTENDANCE POLICY</p><h2 id="p0-rules-title">打卡规则</h2><p className="p0-sheet-description">适用于当前员工及项目的考勤安排。</p><div className="p0-rule-list">{rules.map(({ label, values }) => <div className="p0-rule-row" key={label}><Clock3 size={15} aria-hidden="true" /><div><strong>{label}</strong><div className="p0-rule-values">{values.map((value) => <span key={value}>{value}</span>)}</div></div></div>)}</div><button className="p0-primary p0-submit-punch" onClick={onClose}>关闭</button></section></div>
 }
 
 function ProductNote() {
