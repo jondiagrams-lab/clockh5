@@ -13,19 +13,17 @@ import {
   CircleAlert,
   Clock3,
   FileText,
-  FileSpreadsheet,
   Fingerprint,
   MapPin,
   Plane,
   RefreshCw,
   ShieldCheck,
-  Table2,
   UserRound,
   Wifi,
   X,
 } from "lucide-react"
 
-type Tab = "打卡" | "日历" | "功能清单" | "WPS表格" | "申请" | "我的"
+type Tab = "打卡" | "日历" | "申请" | "我的"
 type ViewMode = "日" | "周" | "月"
 type ApplicationKind = "补卡申请" | "请假申请" | "出差申请" | "外出申请" | "加班申请"
 type ApplicationStatus = "审批中" | "已通过" | "已拒绝"
@@ -87,12 +85,11 @@ const initialPunchRecords: PunchRecord[] = [
   { id: "punch-085214", kind: "上班打卡", time: "08:52:14", status: "正常" },
 ]
 
-const navItems: { label: Exclude<Tab, "我的">; icon: typeof Clock3 }[] = [
+const navItems: { label: Tab; icon: typeof Clock3 }[] = [
   { label: "打卡", icon: Clock3 },
   { label: "日历", icon: CalendarDays },
-  { label: "功能清单", icon: ClipboardList },
-  { label: "WPS表格", icon: Table2 },
-  { label: "申请", icon: UserRound },
+  { label: "申请", icon: ClipboardList },
+  { label: "我的", icon: UserRound },
 ]
 
 const requestItems: { kind: ApplicationKind; icon: typeof Clock3; hint: string }[] = [
@@ -238,7 +235,7 @@ export function AttendanceH5() {
       <StatusBar time={currentTime} />
       {activeTab !== "打卡" && <header className="topbar">
         <Brand />
-        <button className="p0-user-entry" onClick={() => setActiveTab("我的")}><UserRound size={15} /><span>{employee.name}</span><ChevronRight size={14} /></button>
+        <button className="p0-user-entry" onClick={() => setActiveTab("我的")} aria-label="打开个人中心"><UserRound size={15} /><span>示例账号</span><ChevronRight size={14} /></button>
       </header>}
 
       {activeTab === "打卡" && <HomeScreen
@@ -265,14 +262,12 @@ export function AttendanceH5() {
         onMonthChange={setVisibleMonth}
         onRequest={() => openRequest("补卡申请")}
       />}
-      {activeTab === "功能清单" && <FeaturesScreen onTab={setActiveTab} onRequest={openRequest} onRules={() => setRulesOpen(true)} />}
-      {activeTab === "WPS表格" && <WpsTableScreen today={today} records={punchRecords} />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
-      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} />}
+      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} onApplications={() => setActiveTab("申请")} />}
 
       <nav className="bottom-nav" aria-label="主导航">
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={activeTab === label ? "nav-active" : ""} aria-current={activeTab === label ? "page" : undefined} onClick={() => setActiveTab(label)}>
-          <Icon size={20} /><span>{label}</span>{label === "申请" && applications.some((item) => item.status === "审批中") && <i className="nav-dot" />}
+          <Icon size={20} /><span>{label}</span>{label === "我的" && applications.some((item) => item.status === "审批中") && <i className="nav-dot" />}
         </button>)}
       </nav>
 
@@ -314,6 +309,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
       <div className="p0-home-sync"><span><i />北京时间 · 实时更新</span><time dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric" })} {dateLabel(today, { weekday: "short" })}</time></div>
       <time className="p0-live-time">{currentTime}</time>
       <p className="p0-work-meta">班次时间：{schedule.start}–{schedule.end}<i />标准工时 {schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
+      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>驻场项目</span><strong>{selectedSite.project}</strong></div>
       <div className="p0-home-site">
         <span className="p0-site-icon"><MapPin size={17} /></span>
         <div><strong>{selectedSite.name}</strong><span>{selectedSite.address}</span></div>
@@ -432,39 +428,7 @@ function statusClass(status: AttendanceStatus) {
   return ""
 }
 
-function FeaturesScreen({ onTab, onRequest, onRules }: { onTab: (tab: Tab) => void; onRequest: (kind: ApplicationKind) => void; onRules: () => void }) {
-  return <section className="page-content subpage p0-features-page"><p className="eyebrow">WORKSPACE</p><h1>功能清单</h1><p className="p0-page-description">常用考勤服务与工作工具</p>
-    <div className="p0-feature-grid">
-      <button className="p0-feature-card" onClick={() => onTab("日历")}><span><CalendarDays size={19} /></span><strong>考勤日历</strong><small>查看日、周、月出勤统计</small><ChevronRight size={15} /></button>
-      <button className="p0-feature-card" onClick={() => onTab("WPS表格")}><span><Table2 size={19} /></span><strong>考勤表格</strong><small>预览并导出 WPS 兼容表格</small><ChevronRight size={15} /></button>
-      {requestItems.map(({ kind, icon: Icon, hint }) => <button className="p0-feature-card" key={kind} onClick={() => onRequest(kind)}><span><Icon size={19} /></span><strong>{kind}</strong><small>{hint}</small><ChevronRight size={15} /></button>)}
-      <button className="p0-feature-card" onClick={onRules}><span><ShieldCheck size={19} /></span><strong>打卡规则</strong><small>查看班次、时间窗和围栏范围</small><ChevronRight size={15} /></button>
-    </div>
-  </section>
-}
 
-function WpsTableScreen({ today, records }: { today: string; records: PunchRecord[] }) {
-  const [exported, setExported] = useState(false)
-  const exportCsv = () => {
-    const rows = [["日期", "打卡类型", "打卡时间", "考勤结果"], ...records.map((record) => [today, record.kind, record.time, record.status])]
-    const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `考勤记录_${today}.csv`
-    link.click()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    setExported(true)
-  }
-  return <section className="page-content subpage p0-wps-page"><p className="eyebrow">ATTENDANCE SHEET</p><h1>WPS表格</h1>
-    <section className="p0-card p0-wps-summary"><span><FileSpreadsheet size={20} /></span><div><strong>{formatMonth(parseISODate(today))}考勤记录</strong><small>{records.length} 条打卡记录 · WPS 兼容 CSV</small></div><span className="p0-sheet-ready">可导出</span></section>
-    <section className="p0-card p0-wps-table-card"><div className="p0-period-head"><div><p className="eyebrow">TODAY&apos;S RECORDS</p><h2>{dateLabel(today, { month: "long", day: "numeric" })}</h2></div><span>{records.length} 条记录</span></div>
-      <div className="p0-table-wrap"><table><caption className="sr-only">今日考勤记录表</caption><thead><tr><th scope="col">打卡类型</th><th scope="col">时间</th><th scope="col">结果</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.kind}</td><td>{record.time}</td><td><span className={`p0-home-record-status ${record.status === "正常" ? "is-normal" : "is-exception"}`}>{record.status}</span></td></tr>)}</tbody></table></div>
-    </section>
-    <button className="p0-primary p0-export-button" onClick={exportCsv}><FileSpreadsheet size={17} />导出表格（CSV）<ArrowRight size={15} /></button>
-    {exported && <p className="p0-export-note" role="status"><Check size={14} />已生成可用 WPS 打开的 CSV 文件</p>}
-  </section>
-}
 
 function SiteSheet({ selectedSite, onClose, onSelect }: { selectedSite: string; onClose: () => void; onSelect: (site: (typeof attendanceSites)[number]) => void }) {
   return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-site-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-site-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">ATTENDANCE SITE</p><h2 id="p0-site-title">切换考勤点</h2><p className="p0-sheet-description">选择本次打卡使用的考勤地点。</p>
@@ -474,32 +438,32 @@ function SiteSheet({ selectedSite, onClose, onSelect }: { selectedSite: string; 
 
 function ApplicationsScreen({ items, filter, setFilter, onRequest }: { items: ApplicationRecord[]; filter: string; setFilter: (value: string) => void; onRequest: (kind: ApplicationKind) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  return <section className="page-content subpage"><p className="eyebrow">MY REQUESTS</p><h1>我的申请</h1>
-    <div className="p0-filter-row" role="group" aria-label="按审批状态筛选">{["全部", "审批中", "已通过", "已拒绝"].map((value) => <button key={value} aria-pressed={filter === value} className={filter === value ? "is-selected" : ""} onClick={() => setFilter(value)}>{value}</button>)}</div>
-    {items.length > 0 ? <div className="p0-application-list">{items.map((item) => <article className="p0-card p0-application-card" key={item.id}>
-      <div className="p0-application-head"><span className="p0-application-icon">{item.kind === "补卡申请" ? <Clock3 size={18} /> : <FileText size={18} />}</span><div><strong>{item.kind}</strong><small>{item.date} · {item.detail}</small></div><span className={`p0-status ${item.status === "已通过" ? "p0-status-success" : item.status === "已拒绝" ? "p0-status-error" : ""}`}>{item.status}</span></div>
-      <div className="p0-application-body"><p><span>申请原因</span><strong>{item.reason}</strong></p>{item.comment && <p><span>处理意见</span><strong>{item.comment}</strong></p>}</div>
-      <button type="button" className="p0-approval-track" aria-expanded={expandedId === item.id} onClick={() => setExpandedId((current) => current === item.id ? null : item.id)}><span className="p0-track-dot" /><span>{expandedId === item.id ? "收起申请详情" : "查看申请详情与审批轨迹"}</span><ChevronRight size={15} /></button>
-      {expandedId === item.id && <section className="p0-application-detail"><strong>审批轨迹</strong><p>提交申请 · {item.date}</p><p>当前状态：{item.status}</p>{item.comment && <p>处理意见：{item.comment}</p>}</section>}
-    </article>)}</div> : <div className="p0-empty"><FileText size={24} /><strong>暂无此状态的申请</strong><span>切换筛选条件查看其他申请记录</span></div>}
-    <div className="p0-application-actions"><button className="p0-primary" onClick={() => onRequest("补卡申请")}>补卡申请</button><button className="p0-secondary" onClick={() => onRequest("请假申请")}>请假申请</button></div>
+  return <section className="page-content subpage p0-applications-hub"><p className="eyebrow">员工申请</p><h1>申请</h1><p className="p0-page-description">发起请假等申请，并查看审批进度与记录</p>
+    <section className="p0-request-block" aria-labelledby="p0-request-entry-title"><div className="p0-request-heading"><h2 id="p0-request-entry-title">申请入口</h2><span>选择类型开始填写</span></div><div className="p0-request-grid">{requestItems.map(({ kind, icon: Icon, hint }) => <button key={kind} type="button" onClick={() => onRequest(kind)}><span><Icon size={18} /></span><strong>{kind}</strong><small>{hint}</small></button>)}</div></section>
+    <section className="p0-request-records" aria-labelledby="p0-request-records-title"><div className="p0-request-heading"><h2 id="p0-request-records-title">我的申请记录</h2><span>{items.length} 条</span></div>
+      <div className="p0-filter-row" role="group" aria-label="按审批状态筛选">{["全部", "审批中", "已通过", "已拒绝"].map((value) => <button key={value} aria-pressed={filter === value} className={filter === value ? "is-selected" : ""} onClick={() => setFilter(value)}>{value}</button>)}</div>
+      {items.length > 0 ? <div className="p0-application-list">{items.map((item) => <article className="p0-card p0-application-card" key={item.id}>
+        <div className="p0-application-head"><span className="p0-application-icon">{item.kind === "补卡申请" ? <Clock3 size={18} /> : <FileText size={18} />}</span><div><strong>{item.kind}</strong><small>{item.date} · {item.detail}</small></div><span className={`p0-status ${item.status === "已通过" ? "p0-status-success" : item.status === "已拒绝" ? "p0-status-error" : ""}`}>{item.status}</span></div>
+        <div className="p0-application-body"><p><span>申请原因</span><strong>{item.reason}</strong></p>{item.comment && <p><span>处理意见</span><strong>{item.comment}</strong></p>}</div>
+        <button type="button" className="p0-approval-track" aria-expanded={expandedId === item.id} onClick={() => setExpandedId((current) => current === item.id ? null : item.id)}><span className="p0-track-dot" /><span>{expandedId === item.id ? "收起申请详情" : "查看申请详情与审批轨迹"}</span><ChevronRight size={15} /></button>
+        {expandedId === item.id && <section className="p0-application-detail"><strong>审批轨迹</strong><p>提交申请 · {item.date}</p><p>当前审批人：项目主管（姓名待配置）</p><p>后续节点：部门主管（姓名待配置）</p><p>当前状态：{item.status}</p>{item.comment && <p>处理意见：{item.comment}</p>}</section>}
+      </article>)}</div> : <div className="p0-empty"><FileText size={24} /><strong>暂无此状态的申请</strong><span>提交申请后，可在这里查看审批进度与处理记录</span></div>}
+    </section>
   </section>
 }
 
-function ProfileScreen({ onRules, onLogin }: { onRules: () => void; onLogin: () => void }) {
-  return <section className="page-content subpage"><p className="eyebrow">MY PROFILE</p><h1>个人中心</h1>
-    <section className="p0-profile-card"><div className="avatar">林</div><div><strong>{employee.name}</strong><span>{employee.department} · {employee.role}</span></div><span className="active-pill">在职</span></section>
-    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><button onClick={onLogin}>切换账号<ChevronRight size={17} /></button></div>
-    <div className="p0-card p0-privacy-card"><ShieldCheck size={18} /><div><strong>位置权限说明</strong><span>仅在发起打卡时获取当前定位，并用于校验有效考勤范围。</span></div></div>
+function ProfileScreen({ onRules, onLogin, onApplications }: { onRules: () => void; onLogin: () => void; onApplications: () => void }) {
+  return <section className="page-content subpage"><p className="eyebrow">个人空间</p><h1>我的</h1>
+    <section className="p0-profile-card"><div className="avatar">林</div><div><strong>示例员工</strong><span>{employee.department} · {employee.role}</span></div><span className="active-pill">原型数据</span></section>
+    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onApplications}>我的申请<ChevronRight size={17} /></button><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><button onClick={onLogin}>企业微信登录<ChevronRight size={17} /></button><button type="button" className="p0-disabled-action" disabled>退出登录（尚未登录）<ChevronRight size={17} /></button></div>
+    <div className="p0-card p0-privacy-card"><ShieldCheck size={18} /><div><strong>原型预览</strong><span>员工资料为示例内容；企业微信认证与员工权限尚未接入。</span></div></div>
   </section>
 }
 
 function LoginSheet({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<"企业微信快捷登录" | "人力系统账号登录">("企业微信快捷登录")
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-login-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-login-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><ShieldCheck size={22} /></div><p className="eyebrow">EMPLOYEE ACCOUNT</p><h2 id="p0-login-title">员工登录</h2>
-    <div className="p0-login-switch" role="tablist" aria-label="登录方式">{(["企业微信快捷登录", "人力系统账号登录"] as const).map((item) => <button key={item} type="button" role="tab" aria-selected={mode === item} className={mode === item ? "is-selected" : ""} onClick={() => setMode(item)}>{item}</button>)}</div>
-    {mode === "企业微信快捷登录" ? <div className="p0-login-panel"><div className="p0-wechat-mark">微</div><strong>企业微信身份认证</strong><span>校验员工身份、组织关系与访问权限</span><button className="p0-primary" disabled>微信授权待接入 <ChevronRight size={16} /></button></div> : <div className="p0-login-panel p0-login-form"><label>员工账号<input autoComplete="username" readOnly placeholder="认证接入后填写" /></label><label>登录凭据<input type="password" autoComplete="current-password" readOnly placeholder="由企业认证服务验证" /></label><button className="p0-primary" disabled>认证服务待接入 <ChevronRight size={16} /></button></div>}
-    <p className="p0-disclaimer">身份认证接入后，员工信息与可访问的考勤数据由企业账号确定。</p>
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-login-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-login-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><ShieldCheck size={22} /></div><p className="eyebrow">员工账号</p><h2 id="p0-login-title">企业微信登录</h2>
+    <div className="p0-login-panel"><div className="p0-wechat-mark">企</div><strong>企业微信身份认证</strong><span>登录后按企业成员身份校验访问权限</span><button className="p0-primary" disabled>企业微信授权暂未接入 <ChevronRight size={16} /></button></div>
+    <p className="p0-disclaimer">当前为界面原型，不会创建登录会话或判定员工权限。</p>
   </section></div>
 }
 
@@ -527,7 +491,8 @@ function ApplicationSheet({ kind, today, onClose, onSubmit }: { kind: Applicatio
     }
     onSubmit(kind, date, detail, reason.trim())
   }
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-form-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-application-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><FileText size={22} /></div><p className="eyebrow">EMPLOYEE REQUEST</p><h2 id="p0-application-title">{kind}</h2>
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-form-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-application-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><FileText size={22} /></div><p className="eyebrow">申请流程</p><h2 id="p0-application-title">{kind}</h2>
+    <div className="p0-approval-flow"><strong>两级审批流程</strong><ol>{["项目主管", "部门主管"].map((role, index) => <li className="p0-approval-step" key={role}><i>{index + 1}</i><span>{role}</span><small>审批人待配置</small></li>)}</ol><p className="p0-approval-note">按员工所属项目匹配项目主管，再由部门主管审批；当前仅展示角色占位。</p></div>
     <form className="p0-application-form" onSubmit={handleSubmit}><label className="p0-form-field">申请日期<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label><label className="p0-form-field">申请时段 / 类型<input value={detail} onChange={(event) => setDetail(event.target.value)} required /></label><label className="p0-form-field">申请原因<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} placeholder="请填写申请原因" required /></label>{error && <span className="p0-form-error" role="alert">{error}</span>}<button className="p0-primary p0-submit-punch" type="submit">提交申请 <ArrowRight size={16} /></button></form>
   </section></div>
 }
