@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import {
   AlertCircle,
   ArrowRight,
@@ -30,6 +30,8 @@ type ApplicationKind = "补卡申请" | "请假申请" | "出差申请" | "外�
 type ApplicationStatus = "审批中" | "已通过" | "已拒绝"
 type AttendanceStatus = "正常" | "迟到" | "早退" | "缺卡" | "待下班打卡" | "休息日" | "未开始"
 type LocationPermissionStatus = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "unsupported"
+type LocationAction = "punch" | "field" | "refresh" | null
+type CurrentCoordinates = { latitude: number; longitude: number }
 
 type ApplicationRecord = {
   id: string
@@ -79,7 +81,7 @@ const attendanceSites = [
   { name: "科技园·研发中心（C座）", project: "科技园", site: "研发中心（C座）", address: "深圳市南山区科苑南路66号", distance: 128 },
 ]
 
- type PunchRecord = { id: string; kind: "上班打卡" | "下班打卡"; time: string; status: "正常" | "早退" | "迟到" }
+ type PunchRecord = { id: string; kind: "上班打卡" | "下班打卡" | "外勤打卡"; time: string; status: "正常" | "早退" | "迟到"; note?: string; photoName?: string; location?: string }
 
 const initialPunchRecords: PunchRecord[] = [
   { id: "punch-115120", kind: "下班打卡", time: "11:51:20", status: "早退" },
@@ -175,6 +177,7 @@ export function AttendanceH5() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
+  const [fieldPunchOpen, setFieldPunchOpen] = useState(false)
   const [siteOpen, setSiteOpen] = useState(false)
   const [projectDetailsOpen, setProjectDetailsOpen] = useState(false)
   const [formOpen, setFormOpen] = useState<ApplicationKind | null>(null)
@@ -197,6 +200,8 @@ export function AttendanceH5() {
   const [locationPermission, setLocationPermission] = useState<LocationPermissionStatus>("idle")
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const [locationPermissionOpen, setLocationPermissionOpen] = useState(true)
+  const [currentCoordinates, setCurrentCoordinates] = useState<CurrentCoordinates | null>(null)
+  const [pendingLocationAction, setPendingLocationAction] = useState<LocationAction>(null)
 
   useEffect(() => {
     if (!navigator.permissions?.query) return
@@ -218,27 +223,58 @@ export function AttendanceH5() {
     window.setTimeout(() => setNotice(""), 2600)
   }
 
-  const requestLocationPermission = () => {
+  const requestLocationPermission = (action: LocationAction = pendingLocationAction) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationPermission("unsupported")
+      setPendingLocationAction(action)
       setLocationPermissionOpen(true)
       return
     }
     setLocationPermission("requesting")
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        setCurrentCoordinates({ latitude: coords.latitude, longitude: coords.longitude })
         setLocationAccuracy(Math.round(coords.accuracy))
         setLocationPermission("granted")
         setLocationPermissionOpen(false)
+        setPendingLocationAction(null)
+        if (action === "punch") setLocationOpen(true)
+        if (action === "field") setFieldPunchOpen(true)
         showNotice("已获取定位权限")
       },
       (error) => {
         setLocationPermission(error.code === 1 ? "denied" : "unavailable")
+        setPendingLocationAction(action)
         setLocationPermissionOpen(true)
         setLocationOpen(false)
+        setFieldPunchOpen(false)
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
     )
+  }
+
+  const openAttendancePunch = () => {
+    if (locationPermission === "granted") requestLocationPermission("punch")
+    else {
+      setPendingLocationAction("punch")
+      setLocationPermissionOpen(true)
+    }
+  }
+
+  const openFieldPunch = () => {
+    if (locationPermission === "granted") requestLocationPermission("field")
+    else {
+      setPendingLocationAction("field")
+      setLocationPermissionOpen(true)
+    }
+  }
+
+  const refreshHomeLocation = () => {
+    if (locationPermission === "granted") requestLocationPermission("refresh")
+    else {
+      setPendingLocationAction("refresh")
+      setLocationPermissionOpen(true)
+    }
   }
 
   const openRequest = (kind: ApplicationKind, initialDate?: string) => {
@@ -258,8 +294,15 @@ export function AttendanceH5() {
   }
   const visibleApplications = useMemo(() => applications.filter((item) => applicationFilter === "全部" || item.status === applicationFilter), [applications, applicationFilter])
 
+  const submitFieldPunch = ({ remark, photoName }: { remark: string; photoName: string }) => {
+    setPunchRecords((current) => [{ id: `field-${Date.now()}`, kind: "外勤打卡", time: currentTime, status: "正常", note: remark, photoName, location: currentCoordinates ? `纬度 ${currentCoordinates.latitude.toFixed(5)}，经度 ${currentCoordinates.longitude.toFixed(5)}` : "未获取当前位置" }, ...current])
+    setFieldPunchOpen(false)
+    showNotice("外勤打卡已提交")
+  }
+
   const submitPunch = () => {
     if (locationPermission !== "granted") {
+      setPendingLocationAction("punch")
       setLocationOpen(false)
       setLocationPermissionOpen(true)
       return
@@ -299,9 +342,9 @@ export function AttendanceH5() {
         distance={distance}
         selectedSite={selectedSite}
         punchedOut={punchedOut}
-        onPunch={() => locationPermission === "granted" ? setLocationOpen(true) : setLocationPermissionOpen(true)}
-        onRefreshLocation={() => locationPermission === "granted" ? requestLocationPermission() : setLocationPermissionOpen(true)}
-        onFieldPunch={() => openRequest("外出申请")}
+        onPunch={openAttendancePunch}
+        onRefreshLocation={refreshHomeLocation}
+        onFieldPunch={openFieldPunch}
         onSwitchSite={() => setSiteOpen(true)}
         onProjectDetails={() => setProjectDetailsOpen(true)}
         onTab={setActiveTab}
@@ -329,8 +372,9 @@ export function AttendanceH5() {
 
       {loginOpen && <LoginSheet onClose={() => setLoginOpen(false)} />}
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
-      {locationOpen && <LocationSheet site={selectedSite} distance={distance} accuracy={locationAccuracy} onRefresh={requestLocationPermission} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
-      {locationPermissionOpen && <LocationPermissionDialog permissionStatus={locationPermission} onRequestPermission={requestLocationPermission} onClose={() => setLocationPermissionOpen(false)} />}
+      {locationOpen && <LocationSheet site={selectedSite} distance={distance} accuracy={locationAccuracy} onRefresh={() => requestLocationPermission("punch")} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
+      {fieldPunchOpen && <OutdoorPunchSheet address={currentCoordinates ? `纬度 ${currentCoordinates.latitude.toFixed(5)}，经度 ${currentCoordinates.longitude.toFixed(5)}` : "正在获取当前位置…"} onClose={() => setFieldPunchOpen(false)} onSubmit={submitFieldPunch} />}
+      {locationPermissionOpen && <LocationPermissionDialog permissionStatus={locationPermission} onRequestPermission={() => requestLocationPermission(pendingLocationAction)} onClose={() => { setLocationPermissionOpen(false); setPendingLocationAction(null) }} />}
       {siteOpen && <SiteSheet selectedSite={selectedSite.name} onClose={() => setSiteOpen(false)} onSelect={(site) => { setSelectedSite(site); setDistance(site.distance); setSiteOpen(false); showNotice(`已切换至${site.site}`) }} />}
       {projectDetailsOpen && <ProjectDetailsSheet site={selectedSite} onClose={() => setProjectDetailsOpen(false)} />}
       {exceptionRecord && <ExceptionSheet record={exceptionRecord} onClose={() => setExceptionRecord(null)} onRequest={openExceptionRequest} />}
@@ -390,8 +434,8 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
     <section className="p0-card p0-home-records">
       <div className="p0-records-heading"><h2>今日打卡记录</h2><span>共 {punchRecords.length} 条记录</span></div>
       <div className="p0-home-record-list">{punchRecords.slice(0, 4).map((item) => <article className="p0-home-record" key={item.id}>
-        <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : ""}`}>{item.kind === "上班打卡" ? "上" : "下"}</span>
-        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{selectedSite.name}</span></div>
+        <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : item.kind === "外勤打卡" ? "is-field" : ""}`}>{item.kind === "上班打卡" ? "上" : item.kind === "外勤打卡" ? "外" : "下"}</span>
+        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{item.location ?? selectedSite.name}</span></div>
         <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
       </article>)}</div>
       <div className="p0-missed-punch-link"><span>忘记打卡？</span><button type="button" onClick={onRequestRepair}>申请补卡 <ChevronRight size={14} /></button></div>
@@ -546,6 +590,36 @@ function LoginSheet({ onClose }: { onClose: () => void }) {
   </section></div>
 }
 
+function OutdoorPunchSheet({ address, onClose, onSubmit }: { address: string; onClose: () => void; onSubmit: (details: { remark: string; photoName: string }) => void }) {
+  const [remark, setRemark] = useState("")
+  const [photoName, setPhotoName] = useState("")
+  const [remarkError, setRemarkError] = useState("")
+  const [photoError, setPhotoError] = useState("")
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const nextRemarkError = remark.trim() ? "" : "请填写打卡备注。"
+    const nextPhotoError = photoName ? "" : "请拍摄或选择一张现场照片。"
+    setRemarkError(nextRemarkError)
+    setPhotoError(nextPhotoError)
+    if (nextRemarkError || nextPhotoError) return
+    onSubmit({ remark: remark.trim(), photoName })
+  }
+
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-outdoor-title" onClick={(event) => event.stopPropagation()}>
+    <div className="sheet-handle" /><button type="button" className="sheet-close" onClick={onClose} aria-label="关闭外勤打卡"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">现场打卡</p><h2 id="p0-outdoor-title">外勤打卡</h2><p className="p0-sheet-description">确认当前位置，填写打卡备注并拍摄现场照片后提交。</p>
+    <div className="p0-location-status"><MapPin size={18} /><div><strong>当前地址</strong><span>{address}</span></div><span className="p0-location-state">已定位</span></div>
+    <p className="p0-disclaimer">当前以 GPS 坐标显示；显示街道地址需配置逆地理编码服务。</p>
+    <form noValidate onSubmit={handleSubmit}>
+      <label className="p0-form-field"><span>打卡备注（必填）</span><textarea value={remark} onChange={(event) => { setRemark(event.target.value); if (event.target.value.trim()) setRemarkError("") }} placeholder="请输入本次外勤情况" maxLength={200} required aria-required="true" aria-invalid={Boolean(remarkError)} aria-describedby={remarkError ? "p0-outdoor-remark-error" : undefined} /></label>
+      {remarkError && <span id="p0-outdoor-remark-error" className="p0-required-error" role="alert">{remarkError}</span>}
+      <label className="p0-form-field"><span>拍照（必填）</span><span className="p0-file-picker"><span className="p0-file-picker-copy"><strong>{photoName || "拍摄或选择现场照片"}</strong><small>{photoName ? "已添加照片" : "将打开相机或相册"}</small></span><input type="file" accept="image/*" capture="environment" required aria-label="拍照（必填）" aria-required="true" aria-invalid={Boolean(photoError)} aria-describedby={photoError ? "p0-outdoor-photo-error" : undefined} onChange={(event) => { const file = event.target.files?.[0]; setPhotoName(file?.name ?? ""); if (file) setPhotoError("") }} /></span></label>
+      {photoError && <span id="p0-outdoor-photo-error" className="p0-required-error" role="alert">{photoError}</span>}
+      <button type="submit" className="p0-primary p0-submit-punch">确认外勤打卡 <Check size={17} /></button>
+    </form>
+  </section></div>
+}
+
 function LocationPermissionDialog({ permissionStatus, onRequestPermission, onClose }: { permissionStatus: LocationPermissionStatus; onRequestPermission: () => void; onClose: () => void }) {
   const permissionMessage = permissionStatus === "denied"
     ? "定位权限未开启，请在浏览器或微信的页面权限设置中允许定位后重试。"
@@ -596,7 +670,7 @@ function ApplicationSheet({ kind, today, initialDate, onClose, onSubmit }: { kin
     if (endDate < value) setEndDate(value)
   }
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!reason.trim()) {
       setError("请填写申请原因")
