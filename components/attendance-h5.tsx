@@ -54,7 +54,7 @@ const employee = {
   company: "澄海科技有限公司",
   department: "产品设计部",
   role: "产品设计师",
-  project: "高新科技园",
+  project: "中核2026年人力外包项目",
   site: "集团总部大厦（A座）",
   address: "深圳市南山区科技中一路18号",
 }
@@ -73,7 +73,7 @@ const schedule = {
 const locationFixture = { distance: 38, accuracy: 12, radius: 100 }
 
 const attendanceSites = [
-  { name: "高新科技园·集团总部大厦（A座）", project: "高新科技园", site: "集团总部大厦（A座）", address: "深圳市南山区科技中一路18号", distance: 38 },
+  { name: "高新科技园·集团总部大厦（A座）", project: "中核2026年人力外包项目", site: "集团总部大厦（A座）", address: "深圳市南山区科技中一路18号", distance: 38 },
   { name: "高新科技园·创新中心（B座）", project: "高新科技园", site: "创新中心（B座）", address: "深圳市南山区科技中一路22号", distance: 64 },
   { name: "科技园·研发中心（C座）", project: "科技园", site: "研发中心（C座）", address: "深圳市南山区科苑南路66号", distance: 128 },
 ]
