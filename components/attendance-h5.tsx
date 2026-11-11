@@ -405,13 +405,15 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
 }
 
 function DailyAttendanceCard({ record, onException }: { record: AttendanceRecord; onException: () => void }) {
-  const hasException = record.status === "缺卡" || record.status === "迟到" || record.status === "早退"
+  const showStartException = record.status === "迟到" || (record.status === "缺卡" && !record.startTime)
+  const showEndException = record.status === "早退" || (record.status === "缺卡" && Boolean(record.startTime) && !record.endTime)
   return <section className="p0-card p0-detail-card"><div className="p0-card-head"><div><p className="eyebrow">{record.date} · 本人考勤</p><h2>{record.isWorkingDay ? schedule.name : record.status}</h2></div><StatusPill status={record.status} /></div>
     {record.isWorkingDay && <>
       <div className="p0-record-row"><span className="p0-record-icon"><Clock3 size={16} /></span><div><strong>上班打卡</strong><small>应打卡 {schedule.start} · 时段 {schedule.startWindow}</small></div><b className={!record.startTime && record.status === "缺卡" ? "p0-missed-punch-value" : ""}>{record.startTime ?? (record.status === "未开始" ? "--:--" : "缺卡")}</b></div>
-      <div className="p0-record-row"><span className="p0-record-icon p0-record-muted"><Clock3 size={16} /></span><div><strong>下班打卡</strong><small>应打卡 {schedule.end} · 时段 {schedule.endWindow}</small></div><b>{record.endTime ?? (record.status === "未开始" ? "--:--" : "待打卡")}</b></div>
+      {showStartException && <button type="button" className="p0-exception-trigger" onClick={onException}><CircleAlert size={15} />异常处理<ChevronRight size={15} /></button>}
+      <div className="p0-record-row"><span className="p0-record-icon p0-record-muted"><Clock3 size={16} /></span><div><strong>下班打卡</strong><small>应打卡 {schedule.end} · 时段 {schedule.endWindow}</small></div><b className={!record.endTime && record.status === "缺卡" ? "p0-missed-punch-value" : ""}>{record.endTime ?? (record.status === "未开始" ? "--:--" : "待打卡")}</b></div>
+      {showEndException && <button type="button" className="p0-exception-trigger" onClick={onException}><CircleAlert size={15} />异常处理<ChevronRight size={15} /></button>}
       <div className="p0-result-row"><span>考勤结果</span><strong>{record.status}</strong></div>
-      {hasException && <button type="button" className="p0-exception-trigger" onClick={onException}><CircleAlert size={15} />异常处理<ChevronRight size={15} /></button>}
     </>}
     {!record.isWorkingDay && <div className="p0-empty p0-rest-day"><CalendarDays size={20} /><strong>{record.status === "休息日" ? "今日休息" : "班次尚未开始"}</strong><span>{record.status === "休息日" ? "无需打卡" : "该日期暂无排班"}</span></div>}
   </section>
