@@ -6,7 +6,6 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CalendarDays,
-  ChevronDown,
   Check,
   ClipboardList,
   ChevronLeft,
@@ -439,7 +438,6 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
   onOpenRules: () => void
   onRequestRepair: () => void
 }) {
-  const [showOtherSites, setShowOtherSites] = useState(false)
   const record = createAttendanceRecord(today, today, punchedOut)
   const isInRange = distance !== null && distance <= locationFixture.radius
   const locationLabel = locationPermission === "requesting"
@@ -466,10 +464,6 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
       : !isInRange
         ? "进入考勤范围后可打卡"
         : punchedOut ? "点击完成下班打卡" : "点击完成上班打卡"
-  const otherSites = attendanceSites
-    .filter((site) => site.name !== selectedSite.name)
-    .map((site) => ({ ...site, distance: currentCoordinates ? calculateDistanceMeters(currentCoordinates, site) : null }))
-    .sort((first, second) => (first.distance ?? Number.POSITIVE_INFINITY) - (second.distance ?? Number.POSITIVE_INFINITY))
 
   return <section className="page-content p0-checkin-home">
     <section className="p0-card p0-home-main-card" aria-label="考勤打卡">
@@ -477,16 +471,8 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
         <div className="p0-main-site-row">
           <span className="p0-main-site-icon"><MapPin size={15} /></span>
           <div className="p0-main-site-copy"><strong>{selectedSite.site}</strong><span>{selectedSite.address}</span></div>
-          <button type="button" className="p0-main-site-toggle" aria-label={showOtherSites ? "收起其他考勤地址" : "查看更多考勤地址"} aria-expanded={showOtherSites} aria-controls="p0-other-site-list" title="查看更多考勤地址" onClick={() => setShowOtherSites((current) => !current)}><ChevronDown size={14} /></button>
-          <button type="button" className="p0-main-rules-toggle" aria-label="查看打卡规则" title="查看打卡规则" onClick={onOpenRules}><FileText size={13} /></button>
+          <button type="button" className="p0-main-rules-toggle" aria-label="查看打卡规则" title="查看打卡规则" onClick={onOpenRules}><FileText size={12} />打卡规则</button>
         </div>
-        {showOtherSites && <div className="p0-other-addresses" id="p0-other-site-list">
-          <strong>其他考勤地址</strong>
-          {otherSites.map((site) => <div className="p0-other-address" key={site.name}>
-            <span><b>{site.site}</b><small>{site.address}</small></span>
-            <em>{site.distance === null ? "待定位" : `${site.distance}m`}</em>
-          </div>)}
-        </div>}
         <div className="p0-main-meta-row">
           <span className="p0-main-schedule">班次 {schedule.start}–{schedule.end}</span>
           <button type="button" className="p0-main-project" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}><BriefcaseBusiness size={12} /><span>{selectedSite.project}</span></button>
