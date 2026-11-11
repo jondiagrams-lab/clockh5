@@ -175,6 +175,7 @@ export function AttendanceH5() {
   const [rulesOpen, setRulesOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
   const [siteOpen, setSiteOpen] = useState(false)
+  const [projectDetailsOpen, setProjectDetailsOpen] = useState(false)
   const [formOpen, setFormOpen] = useState<ApplicationKind | null>(null)
   const [formInitialDate, setFormInitialDate] = useState<string | undefined>()
   const [exceptionRecord, setExceptionRecord] = useState<AttendanceRecord | null>(null)
@@ -262,6 +263,7 @@ export function AttendanceH5() {
         onRefreshLocation={() => setDistance((current) => current <= locationFixture.radius ? 128 : selectedSite.distance)}
         onFieldPunch={() => openRequest("外出申请")}
         onSwitchSite={() => setSiteOpen(true)}
+        onProjectDetails={() => setProjectDetailsOpen(true)}
         onTab={setActiveTab}
         onRequestRepair={() => openRequest("补卡申请")}
       />}
@@ -289,6 +291,7 @@ export function AttendanceH5() {
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
       {locationOpen && <LocationSheet site={selectedSite} distance={distance} onRefresh={() => setDistance((current) => current <= locationFixture.radius ? 128 : selectedSite.distance)} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
       {siteOpen && <SiteSheet selectedSite={selectedSite.name} onClose={() => setSiteOpen(false)} onSelect={(site) => { setSelectedSite(site); setDistance(site.distance); setSiteOpen(false); showNotice(`已切换至${site.site}`) }} />}
+      {projectDetailsOpen && <ProjectDetailsSheet site={selectedSite} onClose={() => setProjectDetailsOpen(false)} />}
       {exceptionRecord && <ExceptionSheet record={exceptionRecord} onClose={() => setExceptionRecord(null)} onRequest={openExceptionRequest} />}
       {formOpen && <ApplicationSheet kind={formOpen} today={today} initialDate={formInitialDate} onClose={() => { setFormOpen(null); setFormInitialDate(undefined) }} onSubmit={submitApplication} />}
       {notice && <div className="p0-toast" role="status">{notice}</div>}
@@ -301,7 +304,7 @@ function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
-function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onTab, onRequestRepair }: {
+function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onProjectDetails, onTab, onRequestRepair }: {
   today: string
   currentTime: string
   punchRecords: PunchRecord[]
@@ -312,6 +315,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
   onRefreshLocation: () => void
   onFieldPunch: () => void
   onSwitchSite: () => void
+  onProjectDetails: () => void
   onTab: (tab: Tab) => void
   onRequestRepair: () => void
 }) {
@@ -321,7 +325,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
       <div className="p0-home-sync"><span><i />北京时间 · 实时更新</span><time dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric" })} {dateLabel(today, { weekday: "short" })}</time></div>
       <time className="p0-live-time">{currentTime}</time>
       <p className="p0-work-meta">班次时间：{schedule.start}–{schedule.end}<i />标准工时 {schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
-      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>驻场项目</span><strong>{selectedSite.project}</strong></div>
+      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>驻场项目</span><button type="button" className="p0-project-name-button" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}>{selectedSite.project}</button></div>
       <div className="p0-home-site">
         <span className="p0-site-icon"><MapPin size={17} /></span>
         <div><strong>{selectedSite.name}</strong><span>{selectedSite.address}</span></div>
@@ -458,6 +462,15 @@ function statusClass(status: AttendanceStatus) {
 function SiteSheet({ selectedSite, onClose, onSelect }: { selectedSite: string; onClose: () => void; onSelect: (site: (typeof attendanceSites)[number]) => void }) {
   return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-site-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-site-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">ATTENDANCE SITE</p><h2 id="p0-site-title">切换考勤点</h2><p className="p0-sheet-description">选择本次打卡使用的考勤地点。</p>
     <div className="p0-site-options">{attendanceSites.map((site) => <button key={site.name} aria-pressed={selectedSite === site.name} className={selectedSite === site.name ? "is-selected" : ""} onClick={() => onSelect(site)}><MapPin size={16} /><span><strong>{site.name}</strong><small>{site.address} · {site.distance}m</small></span>{selectedSite === site.name && <Check size={17} />}</button>)}</div>
+  </section></div>
+}
+
+function ProjectDetailsSheet({ site, onClose }: { site: (typeof attendanceSites)[number]; onClose: () => void }) {
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-project-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-project-detail-title" onClick={(event) => event.stopPropagation()}>
+    <div className="sheet-handle" /><button type="button" className="sheet-close" onClick={onClose} aria-label="关闭项目详情"><X size={20} /></button>
+    <div className="sheet-icon"><BriefcaseBusiness size={22} /></div><p className="eyebrow">PROJECT DETAILS</p><h2 id="p0-project-detail-title">驻场项目详情</h2>
+    <div className="p0-project-detail-list"><div><span>项目名称</span><strong>{site.project}</strong></div><div><span>驻场地点</span><strong>{site.site}</strong></div><div><span>办公地址</span><strong>{site.address}</strong></div><div><span>考勤范围</span><strong>{locationFixture.radius} 米</strong></div></div>
+    <button type="button" className="p0-primary p0-project-detail-confirm" onClick={onClose}>完成 <Check size={16} /></button>
   </section></div>
 }
 
