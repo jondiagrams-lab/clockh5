@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronDown,
   Check,
   ClipboardList,
   ChevronLeft,
@@ -31,6 +32,7 @@ type ApplicationStatus = "审批中" | "已通过" | "已拒绝"
 type AttendanceStatus = "正常" | "迟到" | "早退" | "缺卡" | "待下班打卡" | "休息日" | "未开始"
 type LocationPermissionStatus = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "unsupported"
 type LocationAction = "punch" | "refresh" | null
+type Coordinates = { latitude: number; longitude: number }
 
 type ApplicationRecord = {
   id: string
@@ -72,14 +74,30 @@ const schedule = {
   flexibleMinutes: 30,
 }
 
-const locationFixture = { distance: 38, accuracy: 12, radius: 100 }
+const locationFixture = { accuracy: 12, radius: 100 }
 const demoFieldAddress = "深圳市南山区科技中一路18号"
 
 const attendanceSites = [
-  { name: "高新科技园·集团总部大厦（A座）", project: "中核2026年人力外包项目", site: "集团总部大厦（A座）", address: "深圳市南山区科技中一路18号", distance: 38 },
-  { name: "高新科技园·创新中心（B座）", project: "高新科技园", site: "创新中心（B座）", address: "深圳市南山区科技中一路22号", distance: 64 },
-  { name: "科技园·研发中心（C座）", project: "科技园", site: "研发中心（C座）", address: "深圳市南山区科苑南路66号", distance: 128 },
+  { name: "高新科技园·集团总部大厦（A座）", project: "中核2026年人力外包项目", site: "集团总部大厦（A座）", address: "深圳市南山区科技中一路18号", latitude: 22.5341, longitude: 113.93231 },
+  { name: "高新科技园·创新中心（B座）", project: "高新科技园", site: "创新中心（B座）", address: "深圳市南山区科技中一路22号", latitude: 22.53448, longitude: 113.93271 },
+  { name: "科技园·研发中心（C座）", project: "科技园", site: "研发中心（C座）", address: "深圳市南山区科苑南路66号", latitude: 22.5322, longitude: 113.9351 },
 ]
+
+function calculateDistanceMeters(from: Coordinates, to: Coordinates) {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const latitudeDelta = toRadians(to.latitude - from.latitude)
+  const longitudeDelta = toRadians(to.longitude - from.longitude)
+  const value = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(toRadians(from.latitude)) * Math.cos(toRadians(to.latitude)) * Math.sin(longitudeDelta / 2) ** 2
+  return Math.round(6_371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)))
+}
+
+function findNearestAttendanceSite(coordinates: Coordinates) {
+  return attendanceSites.map((site) => ({
+    site,
+    distance: calculateDistanceMeters(coordinates, site),
+  })).sort((first, second) => first.distance - second.distance)[0] ?? null
+}
 
  type PunchRecord = { id: string; kind: "上班打卡" | "下班打卡" | "外勤打卡"; time: string; status: "正常" | "早退" | "迟到"; note?: string; photoName?: string; location?: string }
 
@@ -178,7 +196,6 @@ export function AttendanceH5() {
   const [rulesOpen, setRulesOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
   const [fieldPunchOpen, setFieldPunchOpen] = useState(false)
-  const [siteOpen, setSiteOpen] = useState(false)
   const [projectDetailsOpen, setProjectDetailsOpen] = useState(false)
   const [formOpen, setFormOpen] = useState<ApplicationKind | null>(null)
   const [formInitialDate, setFormInitialDate] = useState<string | undefined>()
@@ -187,7 +204,14 @@ export function AttendanceH5() {
   const [punchedOut, setPunchedOut] = useState(true)
   const [punchRecords, setPunchRecords] = useState(initialPunchRecords)
   const [currentTime, setCurrentTime] = useState("14:22:08")
-  const [selectedSite, setSelectedSite] = useState(attendanceSites[0])
+  const [currentCoordinates, setCurrentCoordinates] = useState<Coordinates | null>(null)
+
+  useEffect(() => {
+    const updateCurrentTime = () => setCurrentTime(new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).format(new Date()))
+    updateCurrentTime()
+    const interval = window.setInterval(updateCurrentTime, 1000)
+    return () => window.clearInterval(interval)
+  }, [])
   const [attendanceMode, setAttendanceMode] = useState<ViewMode>("日")
   const [selectedDate, setSelectedDate] = useState(today)
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -196,10 +220,9 @@ export function AttendanceH5() {
   })
   const [applicationFilter, setApplicationFilter] = useState("全部")
   const [applications, setApplications] = useState(() => createApplicationRecords(today))
-  const [distance, setDistance] = useState(locationFixture.distance)
   const [locationPermission, setLocationPermission] = useState<LocationPermissionStatus>("idle")
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
-  const [locationPermissionOpen, setLocationPermissionOpen] = useState(true)
+  const [locationPermissionOpen, setLocationPermissionOpen] = useState(false)
   const [pendingLocationAction, setPendingLocationAction] = useState<LocationAction>(null)
 
   useEffect(() => {
@@ -207,9 +230,16 @@ export function AttendanceH5() {
     let active = true
     navigator.permissions.query({ name: "geolocation" }).then(({ state }) => {
       if (!active) return
-      if (state === "granted") {
+      if (state === "granted" && navigator.geolocation) {
         setLocationPermission("granted")
         setLocationPermissionOpen(false)
+        navigator.geolocation.getCurrentPosition(({ coords }) => {
+          if (!active) return
+          setCurrentCoordinates({ latitude: coords.latitude, longitude: coords.longitude })
+          setLocationAccuracy(Math.round(coords.accuracy))
+        }, () => {
+          if (active) setLocationPermission("unavailable")
+        }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 })
       } else if (state === "denied") {
         setLocationPermission("denied")
       }
@@ -232,6 +262,7 @@ export function AttendanceH5() {
     setLocationPermission("requesting")
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        setCurrentCoordinates({ latitude: coords.latitude, longitude: coords.longitude })
         setLocationAccuracy(Math.round(coords.accuracy))
         setLocationPermission("granted")
         setLocationPermissionOpen(false)
@@ -286,6 +317,11 @@ export function AttendanceH5() {
     const parsed = parseISODate(date)
     setVisibleMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
   }
+  const nearestSiteMatch = useMemo(() => currentCoordinates ? findNearestAttendanceSite(currentCoordinates) : null, [currentCoordinates])
+  const selectedSite = nearestSiteMatch?.site ?? attendanceSites[0]
+  const distance = nearestSiteMatch?.distance ?? null
+  const isWithinRange = distance !== null && distance <= locationFixture.radius
+  const canPunch = locationPermission === "granted" && isWithinRange
   const visibleApplications = useMemo(() => applications.filter((item) => applicationFilter === "全部" || item.status === applicationFilter), [applications, applicationFilter])
 
   const submitFieldPunch = ({ remark, photoName, address }: { remark: string; photoName: string; address: string }) => {
@@ -295,7 +331,7 @@ export function AttendanceH5() {
   }
 
   const submitPunch = () => {
-    if (locationPermission !== "granted") {
+    if (locationPermission !== "granted" || distance === null) {
       setPendingLocationAction("punch")
       setLocationOpen(false)
       setLocationPermissionOpen(true)
@@ -333,15 +369,17 @@ export function AttendanceH5() {
         today={today}
         currentTime={currentTime}
         punchRecords={punchRecords}
+        currentCoordinates={currentCoordinates}
         distance={distance}
+        locationAccuracy={locationAccuracy}
         selectedSite={selectedSite}
+        locationPermission={locationPermission}
+        canPunch={canPunch}
         punchedOut={punchedOut}
         onPunch={openAttendancePunch}
         onRefreshLocation={refreshHomeLocation}
         onFieldPunch={openFieldPunch}
-        onSwitchSite={() => setSiteOpen(true)}
         onProjectDetails={() => setProjectDetailsOpen(true)}
-        onTab={setActiveTab}
         onRequestRepair={() => openRequest("补卡申请")}
       />}
       {activeTab === "日历" && <AttendanceScreen
@@ -366,10 +404,9 @@ export function AttendanceH5() {
 
       {loginOpen && <LoginSheet onClose={() => setLoginOpen(false)} />}
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
-      {locationOpen && <LocationSheet site={selectedSite} distance={distance} accuracy={locationAccuracy} onRefresh={() => requestLocationPermission("punch")} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
+      {locationOpen && distance !== null && <LocationSheet site={selectedSite} distance={distance} accuracy={locationAccuracy} onRefresh={() => requestLocationPermission("punch")} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
       {fieldPunchOpen && <OutdoorPunchSheet address={demoFieldAddress} onClose={() => setFieldPunchOpen(false)} onSubmit={submitFieldPunch} />}
       {locationPermissionOpen && <LocationPermissionDialog permissionStatus={locationPermission} onRequestPermission={() => requestLocationPermission(pendingLocationAction)} onClose={() => { setLocationPermissionOpen(false); setPendingLocationAction(null) }} />}
-      {siteOpen && <SiteSheet selectedSite={selectedSite.name} onClose={() => setSiteOpen(false)} onSelect={(site) => { setSelectedSite(site); setDistance(site.distance); setSiteOpen(false); showNotice(`已切换至${site.site}`) }} />}
       {projectDetailsOpen && <ProjectDetailsSheet site={selectedSite} onClose={() => setProjectDetailsOpen(false)} />}
       {exceptionRecord && <ExceptionSheet record={exceptionRecord} onClose={() => setExceptionRecord(null)} onRequest={openExceptionRequest} />}
       {formOpen && <ApplicationSheet kind={formOpen} today={today} initialDate={formInitialDate} onClose={() => { setFormOpen(null); setFormInitialDate(undefined) }} onSubmit={submitApplication} />}
@@ -383,53 +420,83 @@ function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
-function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onProjectDetails, onTab, onRequestRepair }: {
+function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, distance, locationAccuracy, locationPermission, selectedSite, canPunch, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onProjectDetails, onRequestRepair }: {
   today: string
   currentTime: string
   punchRecords: PunchRecord[]
-  distance: number
+  currentCoordinates: Coordinates | null
+  distance: number | null
+  locationAccuracy: number | null
+  locationPermission: LocationPermissionStatus
   selectedSite: (typeof attendanceSites)[number]
+  canPunch: boolean
   punchedOut: boolean
   onPunch: () => void
   onRefreshLocation: () => void
   onFieldPunch: () => void
-  onSwitchSite: () => void
   onProjectDetails: () => void
-  onTab: (tab: Tab) => void
   onRequestRepair: () => void
 }) {
+  const [showOtherSites, setShowOtherSites] = useState(false)
   const record = createAttendanceRecord(today, today, punchedOut)
+  const rangeLabel = distance === null ? "待定位" : distance <= locationFixture.radius ? `范围内 ${distance}m` : `范围外 ${distance}m`
+  const otherSites = attendanceSites
+    .filter((site) => site.name !== selectedSite.name)
+    .map((site) => ({ ...site, distance: currentCoordinates ? calculateDistanceMeters(currentCoordinates, site) : null }))
+    .sort((first, second) => (first.distance ?? Number.POSITIVE_INFINITY) - (second.distance ?? Number.POSITIVE_INFINITY))
+  const punchHint = !record.isWorkingDay
+    ? "今日为休息日，无需打卡"
+    : distance === null
+      ? "获取当前位置后自动匹配考勤点"
+      : distance > locationFixture.radius
+        ? `距离最近考勤点 ${distance}m，超出 ${locationFixture.radius}m，无法打卡`
+        : `已匹配 ${selectedSite.site} · 距离 ${distance}m`
+
   return <section className="page-content p0-checkin-home">
-    <section className="p0-card p0-clock-card">
-      <div className="p0-home-sync"><span><i />北京时间 · 实时更新</span><time dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric" })} {dateLabel(today, { weekday: "short" })}</time></div>
-      <time className="p0-live-time">{currentTime}</time>
-      <p className="p0-work-meta">打卡时间：{schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
-      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>驻场项目</span><button type="button" className="p0-project-name-button" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}>{selectedSite.project}</button></div>
+    <section className="p0-card p0-clock-card p0-rule-card" aria-labelledby="p0-rule-title">
+      <div className="p0-home-sync"><span><i />考勤规则</span><span className="p0-demo-tag">示例规则</span></div>
       <div className="p0-home-site">
         <span className="p0-site-icon"><MapPin size={17} /></span>
-        <div><strong>{selectedSite.name}</strong><span>{selectedSite.address}</span></div>
-        <span className={`p0-location-state ${distance > locationFixture.radius ? "is-outside" : ""}`}>{distance <= locationFixture.radius ? `范围内 ${distance}m` : `超出 ${distance}m`}</span>
-        <button type="button" aria-label="刷新定位" title="刷新定位" onClick={onRefreshLocation}><RefreshCw size={15} /></button>
+        <div><strong id="p0-rule-title">{selectedSite.site}</strong><span>{selectedSite.address}</span></div>
+        <span className={`p0-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : ""}`}>{rangeLabel}</span>
+        <button type="button" aria-label={showOtherSites ? "收起其他考勤地址" : "查看更多考勤地址"} aria-expanded={showOtherSites} aria-controls="p0-other-site-list" title="查看更多考勤地址" onClick={() => setShowOtherSites((current) => !current)}><ChevronDown size={15} /></button>
       </div>
+      {showOtherSites && <div className="p0-other-addresses" id="p0-other-site-list">
+        <strong>其他考勤地址</strong>
+        {otherSites.map((site) => <div className="p0-other-address" key={site.name}>
+          <span><b>{site.site}</b><small>{site.address}</small></span>
+          <em>{site.distance === null ? "待定位" : `${site.distance}m`}</em>
+        </div>)}
+      </div>}
+      <p className="p0-work-meta p0-rule-time">上班 {schedule.startWindow} · 下班 {schedule.endWindow}</p>
+      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>项目名称</span><button type="button" className="p0-project-name-button" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}>{selectedSite.project}</button></div>
     </section>
 
-    <section className="p0-card p0-main-punch-card">
-      <div className="p0-punch-status"><i />今日打卡已完成 · 可更新下班卡</div>
-      <button className="p0-punch-orb" disabled={!record.isWorkingDay} aria-label="更新下班卡" onClick={onPunch}>
-        <ShieldCheck size={24} strokeWidth={1.8} /><strong>更新下班卡</strong><span>{currentTime}</span>
-      </button>
-      <p className="p0-punch-hint">可随时更新最终下班时间</p>
-      <div className="p0-home-actions">
-        <button type="button" onClick={onFieldPunch}><MapPin size={14} />外勤打卡</button>
-        <button type="button" onClick={onSwitchSite}><MapPin size={14} />切换考勤点</button>
+    <section className="p0-card p0-clock-card p0-current-clock-card" aria-labelledby="p0-current-time-title">
+      <div className="p0-home-time-row"><span id="p0-current-time-title">当前时间</span><time className="p0-live-time">{currentTime}</time><span className="p0-home-time-zone">{dateLabel(today, { month: "numeric", day: "numeric" })} · 北京时间</span></div>
+      <div className="p0-home-site p0-current-site">
+        <span className="p0-site-icon"><MapPin size={17} /></span>
+        <div><strong>{currentCoordinates ? `最近考勤点：${selectedSite.site}` : locationPermission === "requesting" ? "正在获取定位…" : "尚未获取当前位置"}</strong><span>{currentCoordinates ? `${currentCoordinates.latitude.toFixed(5)}, ${currentCoordinates.longitude.toFixed(5)} · ${selectedSite.address}` : "定位后自动匹配最近考勤点"}</span></div>
+        <span className={`p0-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : ""}`}>{rangeLabel}</span>
+        <button type="button" disabled={locationPermission === "requesting"} aria-label={currentCoordinates ? "刷新当前位置" : "获取当前位置"} title={currentCoordinates ? "刷新定位" : "获取定位"} onClick={onRefreshLocation}><RefreshCw size={15} /></button>
       </div>
+      {currentCoordinates && <p className="p0-location-accuracy">定位精度 ±{locationAccuracy ?? "—"}m · 考勤点坐标为演示数据</p>}
+    </section>
+
+    <section className="p0-card p0-main-punch-card" aria-label="打卡操作">
+      <div className="p0-punch-status"><i className={canPunch ? "is-ready" : "is-blocked"} />{canPunch ? `已匹配 ${selectedSite.site} · 可打卡` : distance !== null && distance > locationFixture.radius ? "不在考勤范围内 · 打卡已禁用" : "等待定位匹配考勤点"}</div>
+      <button className="p0-punch-orb" disabled={!canPunch || !record.isWorkingDay} aria-label={punchedOut ? "更新下班卡" : "上班打卡"} onClick={onPunch}>
+        <ShieldCheck size={24} strokeWidth={1.8} /><strong>{punchedOut ? "更新下班卡" : "上班打卡"}</strong><span>{currentTime}</span>
+      </button>
+      <p className="p0-punch-hint">{punchHint}</p>
+      <div className="p0-home-actions"><button type="button" onClick={onFieldPunch}><MapPin size={14} />外勤打卡</button></div>
     </section>
 
     <section className="p0-card p0-home-records">
       <div className="p0-records-heading"><h2>今日打卡记录</h2><span>共 {punchRecords.length} 条记录</span></div>
       <div className="p0-home-record-list">{punchRecords.slice(0, 4).map((item) => <article className="p0-home-record" key={item.id}>
         <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : item.kind === "外勤打卡" ? "is-field" : ""}`}>{item.kind === "上班打卡" ? "上" : item.kind === "外勤打卡" ? "外" : "下"}</span>
-        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{item.location ?? selectedSite.name}</span></div>
+        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{item.location ?? selectedSite.site}</span></div>
         <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
       </article>)}</div>
       <div className="p0-missed-punch-link"><span>忘记打卡？</span><button type="button" onClick={onRequestRepair}>申请补卡 <ChevronRight size={14} /></button></div>
@@ -537,12 +604,6 @@ function statusClass(status: AttendanceStatus) {
 }
 
 
-
-function SiteSheet({ selectedSite, onClose, onSelect }: { selectedSite: string; onClose: () => void; onSelect: (site: (typeof attendanceSites)[number]) => void }) {
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-site-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-site-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">ATTENDANCE SITE</p><h2 id="p0-site-title">切换考勤点</h2><p className="p0-sheet-description">选择本次打卡使用的考勤地点。</p>
-    <div className="p0-site-options">{attendanceSites.map((site) => <button key={site.name} aria-pressed={selectedSite === site.name} className={selectedSite === site.name ? "is-selected" : ""} onClick={() => onSelect(site)}><MapPin size={16} /><span><strong>{site.name}</strong><small>{site.address} · {site.distance}m</small></span>{selectedSite === site.name && <Check size={17} />}</button>)}</div>
-  </section></div>
-}
 
 function ProjectDetailsSheet({ site, onClose }: { site: (typeof attendanceSites)[number]; onClose: () => void }) {
   return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-project-detail-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-project-detail-title" onClick={(event) => event.stopPropagation()}>
