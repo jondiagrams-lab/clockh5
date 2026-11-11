@@ -94,7 +94,6 @@ const navItems: { label: Tab; icon: typeof Clock3 }[] = [
 ]
 
 const requestItems: { kind: ApplicationKind; icon: typeof Clock3; hint: string }[] = [
-  { kind: "补卡申请", icon: Clock3, hint: "补充遗漏的打卡记录" },
   { kind: "请假申请", icon: CalendarDays, hint: "提交假期审批申请" },
   { kind: "出差申请", icon: Plane, hint: "登记出差安排" },
   { kind: "外出申请", icon: MapPin, hint: "提交工作外出申请" },
@@ -246,6 +245,7 @@ export function AttendanceH5() {
         onFieldPunch={() => openRequest("外出申请")}
         onSwitchSite={() => setSiteOpen(true)}
         onTab={setActiveTab}
+        onRequestRepair={() => openRequest("补卡申请")}
       />}
       {activeTab === "日历" && <AttendanceScreen
         mode={attendanceMode}
@@ -256,7 +256,6 @@ export function AttendanceH5() {
         onSelectDate={openDate}
         visibleMonth={visibleMonth}
         onMonthChange={setVisibleMonth}
-        onRequest={() => openRequest("补卡申请")}
       />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
       {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} onApplications={() => setActiveTab("申请")} />}
@@ -282,7 +281,7 @@ function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
-function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onTab }: {
+function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onTab, onRequestRepair }: {
   today: string
   currentTime: string
   punchRecords: PunchRecord[]
@@ -294,6 +293,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
   onFieldPunch: () => void
   onSwitchSite: () => void
   onTab: (tab: Tab) => void
+  onRequestRepair: () => void
 }) {
   const record = createAttendanceRecord(today, today, punchedOut)
   return <section className="page-content p0-checkin-home">
@@ -329,11 +329,12 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
         <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{selectedSite.name}</span></div>
         <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
       </article>)}</div>
+      <div className="p0-missed-punch-link"><span>忘记打卡？</span><button type="button" onClick={onRequestRepair}>申请补卡 <ChevronRight size={14} /></button></div>
     </section>
   </section>
 }
 
-function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSelectDate, visibleMonth, onMonthChange, onRequest }: {
+function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSelectDate, visibleMonth, onMonthChange }: {
   mode: ViewMode
   setMode: (value: ViewMode) => void
   today: string
@@ -342,7 +343,6 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
   onSelectDate: (value: string) => void
   visibleMonth: Date
   onMonthChange: (value: Date) => void
-  onRequest: () => void
 }) {
   const weekDates = getWeekDates(selectedDate)
   const monthDates = getMonthGrid(visibleMonth)
@@ -364,13 +364,13 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
 
   return <section className="page-content subpage p0-attendance-page">
     <p className="eyebrow">MY ATTENDANCE</p>
-    <div className="p0-attendance-title"><h1>考勤明细</h1><button className="p0-rule-link" onClick={onRequest}>补卡申请 <ChevronRight size={15} /></button></div>
+    <div className="p0-attendance-title"><h1>考勤明细</h1></div>
     <div className="p0-view-tabs" role="tablist" aria-label="考勤统计周期">{(["日", "周", "月"] as const).map((value) => <button role="tab" aria-selected={mode === value} className={mode === value ? "is-selected" : ""} key={value} onClick={() => setMode(value)}>{value}统计</button>)}</div>
 
     {mode === "日" && <>
       <PeriodNavigator label={dateLabel(selectedDate)} onPrevious={() => onSelectDate(shiftDate(selectedDate, -1))} onNext={() => onSelectDate(shiftDate(selectedDate, 1))} onToday={() => onSelectDate(today)} />
       <SummaryGrid items={[{ label: "应打卡", value: selectedRecord.isWorkingDay ? "2" : "0", unit: "次" }, { label: "已打卡", value: String(punchCount), unit: "次" }, { label: "考勤结果", value: selectedRecord.status, unit: "" }]} />
-      <DailyAttendanceCard record={selectedRecord} onRequest={onRequest} />
+      <DailyAttendanceCard record={selectedRecord} />
     </>}
 
     {mode === "周" && <>
@@ -383,18 +383,17 @@ function AttendanceScreen({ mode, setMode, today, selectedDate, punchedOut, onSe
       <PeriodNavigator label={monthLabel} onPrevious={() => selectMonth(-1)} onNext={() => selectMonth(1)} onToday={() => { const date = parseISODate(today); onMonthChange(new Date(date.getFullYear(), date.getMonth(), 1)); onSelectDate(today) }} />
       <SummaryGrid items={[{ label: "应出勤", value: String(monthSummary.expectedDays), unit: "天" }, { label: "实际出勤", value: String(monthSummary.attendedDays), unit: "天" }, { label: "迟到 / 早退", value: String(monthSummary.lateEarly), unit: "次" }, { label: "缺卡", value: String(monthSummary.missed), unit: "次" }]} />
       <section className="p0-card p0-calendar-card"><div className="p0-period-head"><div><p className="eyebrow">MONTHLY OVERVIEW</p><h2>月度考勤</h2></div><span>{monthSummary.punched} 次打卡</span></div><div className="p0-calendar-grid p0-calendar-weekdays" aria-hidden="true">{"一二三四五六日".split("").map((day) => <span key={day}>{day}</span>)}</div><div className="p0-calendar-grid" role="group" aria-label={`${monthLabel}日期`}>{monthDates.map((date) => { const record = createAttendanceRecord(date, today, punchedOut); const inMonth = parseISODate(date).getMonth() === visibleMonth.getMonth(); return <button type="button" key={date} aria-label={`${date}，${record.status}`} aria-pressed={selectedDate === date} className={`${inMonth ? "" : "is-outside"} ${selectedDate === date ? "is-selected" : ""} ${date === today ? "is-today" : ""} ${statusClass(record.status)}`} onClick={() => onSelectDate(date)}><span>{parseISODate(date).getDate()}</span><i aria-hidden="true" /></button> })}</div><div className="p0-calendar-key"><span className="p0-calendar-key-dot status-normal" />正常 <span className="p0-calendar-key-dot status-exception" />异常 <span className="p0-calendar-key-dot status-rest" />休息日</div></section>
-      <DailyAttendanceCard record={selectedRecord} onRequest={onRequest} />
+      <DailyAttendanceCard record={selectedRecord} />
     </>}
   </section>
 }
 
-function DailyAttendanceCard({ record, onRequest }: { record: AttendanceRecord; onRequest: () => void }) {
+function DailyAttendanceCard({ record }: { record: AttendanceRecord }) {
   return <section className="p0-card p0-detail-card"><div className="p0-card-head"><div><p className="eyebrow">{record.date} · 本人考勤</p><h2>{record.isWorkingDay ? schedule.name : record.status}</h2></div><StatusPill status={record.status} /></div>
     {record.isWorkingDay && <>
       <div className="p0-record-row"><span className="p0-record-icon"><Clock3 size={16} /></span><div><strong>上班打卡</strong><small>应打卡 {schedule.start} · 时段 {schedule.startWindow}</small></div><b>{record.startTime ?? (record.status === "未开始" ? "--:--" : "缺卡")}</b></div>
       <div className="p0-record-row"><span className="p0-record-icon p0-record-muted"><Clock3 size={16} /></span><div><strong>下班打卡</strong><small>应打卡 {schedule.end} · 时段 {schedule.endWindow}</small></div><b>{record.endTime ?? (record.status === "未开始" ? "--:--" : "待打卡")}</b></div>
       <div className="p0-result-row"><span>考勤结果</span><strong>{record.status}</strong></div>
-      <button className="p0-secondary p0-full-button" onClick={onRequest}>申请补卡 <ChevronRight size={15} /></button>
     </>}
     {!record.isWorkingDay && <div className="p0-empty p0-rest-day"><CalendarDays size={20} /><strong>{record.status === "休息日" ? "今日休息" : "班次尚未开始"}</strong><span>{record.status === "休息日" ? "无需打卡" : "该日期暂无排班"}</span></div>}
   </section>
