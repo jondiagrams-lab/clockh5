@@ -380,6 +380,7 @@ export function AttendanceH5() {
         onRefreshLocation={refreshHomeLocation}
         onFieldPunch={openFieldPunch}
         onProjectDetails={() => setProjectDetailsOpen(true)}
+        onOpenRules={() => setRulesOpen(true)}
         onRequestRepair={() => openRequest("补卡申请")}
       />}
       {activeTab === "日历" && <AttendanceScreen
@@ -420,7 +421,7 @@ function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
-function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, distance, locationAccuracy, locationPermission, selectedSite, canPunch, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onProjectDetails, onRequestRepair }: {
+function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, distance, locationAccuracy, locationPermission, selectedSite, canPunch, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onProjectDetails, onOpenRules, onRequestRepair }: {
   today: string
   currentTime: string
   punchRecords: PunchRecord[]
@@ -435,71 +436,88 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
   onRefreshLocation: () => void
   onFieldPunch: () => void
   onProjectDetails: () => void
+  onOpenRules: () => void
   onRequestRepair: () => void
 }) {
   const [showOtherSites, setShowOtherSites] = useState(false)
   const record = createAttendanceRecord(today, today, punchedOut)
-  const rangeLabel = distance === null ? "待定位" : distance <= locationFixture.radius ? `范围内 ${distance}m` : `范围外 ${distance}m`
+  const isInRange = distance !== null && distance <= locationFixture.radius
+  const locationLabel = locationPermission === "requesting"
+    ? "正在获取定位…"
+    : distance === null
+      ? "尚未获取定位"
+      : isInRange
+        ? "已进入考勤范围"
+        : "当前不在考勤范围内"
+  const locationDetail = currentCoordinates
+    ? `距离最近考勤点 ${distance}m · 定位精度 ±${locationAccuracy ?? "—"}m`
+    : "点击右侧图标获取当前位置"
+  const punchLabel = !record.isWorkingDay
+    ? "休息日"
+    : distance === null
+      ? "等待定位"
+      : !isInRange
+        ? "超出范围"
+        : punchedOut ? "更新下班卡" : "上班打卡"
+  const punchSubtext = !record.isWorkingDay
+    ? "今日无需打卡"
+    : distance === null
+      ? "请先获取当前位置"
+      : !isInRange
+        ? "进入考勤范围后可打卡"
+        : punchedOut ? "点击完成下班打卡" : "点击完成上班打卡"
   const otherSites = attendanceSites
     .filter((site) => site.name !== selectedSite.name)
     .map((site) => ({ ...site, distance: currentCoordinates ? calculateDistanceMeters(currentCoordinates, site) : null }))
     .sort((first, second) => (first.distance ?? Number.POSITIVE_INFINITY) - (second.distance ?? Number.POSITIVE_INFINITY))
-  const punchHint = !record.isWorkingDay
-    ? "今日为休息日，无需打卡"
-    : distance === null
-      ? "获取当前位置后自动匹配考勤点"
-      : distance > locationFixture.radius
-        ? `距离最近考勤点 ${distance}m，超出 ${locationFixture.radius}m，无法打卡`
-        : `已匹配 ${selectedSite.site} · 距离 ${distance}m`
 
   return <section className="page-content p0-checkin-home">
-    <section className="p0-card p0-clock-card p0-rule-card" aria-labelledby="p0-rule-title">
-      <div className="p0-home-sync"><span><i />考勤规则</span><span className="p0-demo-tag">示例规则</span></div>
-      <div className="p0-home-site">
-        <span className="p0-site-icon"><MapPin size={17} /></span>
-        <div><strong id="p0-rule-title">{selectedSite.site}</strong><span>{selectedSite.address}</span></div>
-        <span className={`p0-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : ""}`}>{rangeLabel}</span>
-        <button type="button" aria-label={showOtherSites ? "收起其他考勤地址" : "查看更多考勤地址"} aria-expanded={showOtherSites} aria-controls="p0-other-site-list" title="查看更多考勤地址" onClick={() => setShowOtherSites((current) => !current)}><ChevronDown size={15} /></button>
-      </div>
-      {showOtherSites && <div className="p0-other-addresses" id="p0-other-site-list">
-        <strong>其他考勤地址</strong>
-        {otherSites.map((site) => <div className="p0-other-address" key={site.name}>
-          <span><b>{site.site}</b><small>{site.address}</small></span>
-          <em>{site.distance === null ? "待定位" : `${site.distance}m`}</em>
-        </div>)}
-      </div>}
-      <p className="p0-work-meta p0-rule-time">上班 {schedule.startWindow} · 下班 {schedule.endWindow}</p>
-      <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>项目名称</span><button type="button" className="p0-project-name-button" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}>{selectedSite.project}</button></div>
-    </section>
+    <section className="p0-card p0-home-main-card" aria-label="考勤打卡">
+      <header className="p0-main-card-header">
+        <div className="p0-main-site-row">
+          <span className="p0-main-site-icon"><MapPin size={15} /></span>
+          <div className="p0-main-site-copy"><strong>{selectedSite.site}</strong><span>{selectedSite.address}</span></div>
+          <button type="button" className="p0-main-site-toggle" aria-label={showOtherSites ? "收起其他考勤地址" : "查看更多考勤地址"} aria-expanded={showOtherSites} aria-controls="p0-other-site-list" title="查看更多考勤地址" onClick={() => setShowOtherSites((current) => !current)}><ChevronDown size={14} /></button>
+          <button type="button" className="p0-main-rules-toggle" aria-label="查看打卡规则" title="查看打卡规则" onClick={onOpenRules}><FileText size={13} /></button>
+        </div>
+        {showOtherSites && <div className="p0-other-addresses" id="p0-other-site-list">
+          <strong>其他考勤地址</strong>
+          {otherSites.map((site) => <div className="p0-other-address" key={site.name}>
+            <span><b>{site.site}</b><small>{site.address}</small></span>
+            <em>{site.distance === null ? "待定位" : `${site.distance}m`}</em>
+          </div>)}
+        </div>}
+        <div className="p0-main-meta-row">
+          <span className="p0-main-schedule">班次 {schedule.start}–{schedule.end}</span>
+          <button type="button" className="p0-main-project" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}><BriefcaseBusiness size={12} /><span>{selectedSite.project}</span></button>
+        </div>
+      </header>
 
-    <section className="p0-card p0-clock-card p0-current-clock-card" aria-labelledby="p0-current-time-title">
-      <div className="p0-home-time-row"><span id="p0-current-time-title">当前时间</span><time className="p0-live-time">{currentTime}</time><span className="p0-home-time-zone">{dateLabel(today, { month: "numeric", day: "numeric" })} · 北京时间</span></div>
-      <div className="p0-home-site p0-current-site">
-        <span className="p0-site-icon"><MapPin size={17} /></span>
-        <div><strong>{currentCoordinates ? `最近考勤点：${selectedSite.site}` : locationPermission === "requesting" ? "正在获取定位…" : "尚未获取当前位置"}</strong><span>{currentCoordinates ? `${currentCoordinates.latitude.toFixed(5)}, ${currentCoordinates.longitude.toFixed(5)} · ${selectedSite.address}` : "定位后自动匹配最近考勤点"}</span></div>
-        <span className={`p0-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : ""}`}>{rangeLabel}</span>
-        <button type="button" disabled={locationPermission === "requesting"} aria-label={currentCoordinates ? "刷新当前位置" : "获取当前位置"} title={currentCoordinates ? "刷新定位" : "获取定位"} onClick={onRefreshLocation}><RefreshCw size={15} /></button>
+      <div className="p0-home-clock-block">
+        <time className="p0-live-time">{currentTime}</time>
+        <time className="p0-home-date" dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}</time>
       </div>
-      {currentCoordinates && <p className="p0-location-accuracy">定位精度 ±{locationAccuracy ?? "—"}m · 考勤点坐标为演示数据</p>}
-    </section>
 
-    <section className="p0-card p0-main-punch-card" aria-label="打卡操作">
-      <div className="p0-punch-status"><i className={canPunch ? "is-ready" : "is-blocked"} />{canPunch ? `已匹配 ${selectedSite.site} · 可打卡` : distance !== null && distance > locationFixture.radius ? "不在考勤范围内 · 打卡已禁用" : "等待定位匹配考勤点"}</div>
-      <button className="p0-punch-orb" disabled={!canPunch || !record.isWorkingDay} aria-label={punchedOut ? "更新下班卡" : "上班打卡"} onClick={onPunch}>
-        <ShieldCheck size={24} strokeWidth={1.8} /><strong>{punchedOut ? "更新下班卡" : "上班打卡"}</strong><span>{currentTime}</span>
+      <div className={`p0-single-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : "is-in-range"}`} role="status" aria-live="polite">
+        <span className="p0-single-location-icon"><MapPin size={14} /></span>
+        <span className="p0-single-location-copy"><strong>{locationLabel}</strong><small>{locationDetail}</small></span>
+        <button type="button" disabled={locationPermission === "requesting"} aria-label={currentCoordinates ? "刷新当前位置" : "获取当前位置"} title={currentCoordinates ? "刷新定位" : "获取定位"} onClick={onRefreshLocation}><RefreshCw size={14} /></button>
+      </div>
+
+      <button type="button" className="p0-punch-orb" disabled={!canPunch || !record.isWorkingDay} aria-label={`${punchLabel}，${punchSubtext}`} onClick={onPunch}>
+        <ShieldCheck size={27} strokeWidth={1.8} /><strong>{punchLabel}</strong><span>{punchSubtext}</span>
       </button>
-      <p className="p0-punch-hint">{punchHint}</p>
-      <div className="p0-home-actions"><button type="button" onClick={onFieldPunch}><MapPin size={14} />外勤打卡</button></div>
-    </section>
+      <div className="p0-home-actions"><button type="button" aria-label="外勤打卡" onClick={onFieldPunch}><MapPin size={14} />外勤打卡</button></div>
 
-    <section className="p0-card p0-home-records">
-      <div className="p0-records-heading"><h2>今日打卡记录</h2><span>共 {punchRecords.length} 条记录</span></div>
-      <div className="p0-home-record-list">{punchRecords.slice(0, 4).map((item) => <article className="p0-home-record" key={item.id}>
-        <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : item.kind === "外勤打卡" ? "is-field" : ""}`}>{item.kind === "上班打卡" ? "上" : item.kind === "外勤打卡" ? "外" : "下"}</span>
-        <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{item.location ?? selectedSite.site}</span></div>
-        <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
-      </article>)}</div>
-      <div className="p0-missed-punch-link"><span>忘记打卡？</span><button type="button" onClick={onRequestRepair}>申请补卡 <ChevronRight size={14} /></button></div>
+      <div className="p0-home-records-inline" aria-labelledby="p0-home-records-title">
+        <div className="p0-records-heading"><h2 id="p0-home-records-title">今日打卡记录</h2><span>共 {punchRecords.length} 条</span></div>
+        {punchRecords.length > 0 ? <div className="p0-home-record-list">{punchRecords.slice(0, 3).map((item) => <article className="p0-home-record" key={item.id}>
+          <span className={`p0-record-badge ${item.kind === "上班打卡" ? "is-start" : item.kind === "外勤打卡" ? "is-field" : ""}`}>{item.kind === "上班打卡" ? "上" : item.kind === "外勤打卡" ? "外" : "下"}</span>
+          <div className="p0-home-record-copy"><strong>{item.kind}<time>{item.time}</time></strong><span><MapPin size={11} />{item.location ?? selectedSite.site}</span></div>
+          <span className={`p0-home-record-status ${item.status === "正常" ? "is-normal" : "is-exception"}`}>{item.status}</span>
+        </article>)}</div> : <p className="p0-home-no-records">暂无打卡记录</p>}
+        <div className="p0-missed-punch-link"><span>忘记打卡？</span><button type="button" onClick={onRequestRepair}>申请补卡 <ChevronRight size={14} /></button></div>
+      </div>
     </section>
   </section>
 }
