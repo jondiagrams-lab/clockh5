@@ -234,11 +234,6 @@ export function AttendanceH5() {
   return <main className="h5-shell">
     <div className="phone-frame">
       <StatusBar time={currentTime} />
-      {activeTab !== "打卡" && <header className="topbar">
-        <Brand />
-        <button className="p0-user-entry" onClick={() => setActiveTab("我的")} aria-label="打开个人中心"><UserRound size={15} /><span>示例账号</span><ChevronRight size={14} /></button>
-      </header>}
-
       {activeTab === "打卡" && <HomeScreen
         today={today}
         currentTime={currentTime}
@@ -285,10 +280,6 @@ export function AttendanceH5() {
 
 function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
-}
-
-function Brand() {
-  return <><div className="brand-mark"><Fingerprint size={20} /></div><div className="brand-copy"><strong>考勤助手</strong><span>员工服务</span></div></>
 }
 
 function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onSwitchSite, onTab }: {
