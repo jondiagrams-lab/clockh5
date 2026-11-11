@@ -324,7 +324,7 @@ function HomeScreen({ today, currentTime, punchRecords, distance, selectedSite, 
     <section className="p0-card p0-clock-card">
       <div className="p0-home-sync"><span><i />北京时间 · 实时更新</span><time dateTime={today}>{dateLabel(today, { year: "numeric", month: "long", day: "numeric" })} {dateLabel(today, { weekday: "short" })}</time></div>
       <time className="p0-live-time">{currentTime}</time>
-      <p className="p0-work-meta">班次时间：{schedule.start}–{schedule.end}<i />标准工时 {schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
+      <p className="p0-work-meta">打卡时间：{schedule.start}–{schedule.end}（弹性{schedule.flexibleMinutes}分钟）</p>
       <div className="p0-project-info"><BriefcaseBusiness size={15} /><span>驻场项目</span><button type="button" className="p0-project-name-button" title={selectedSite.project} aria-label={`查看项目详情：${selectedSite.project}`} onClick={onProjectDetails}>{selectedSite.project}</button></div>
       <div className="p0-home-site">
         <span className="p0-site-icon"><MapPin size={17} /></span>
