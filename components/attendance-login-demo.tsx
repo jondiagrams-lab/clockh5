@@ -59,8 +59,8 @@ export function AttendanceLoginDemo() {
 
     if (account.trim().toLowerCase() !== "admin" || password !== "12345") {
       setErrors({
-        account: "演示账号或密码不正确，请使用下方提供的登录信息。",
-        password: "演示账号或密码不正确，请使用下方提供的登录信息。",
+        account: "账号或密码错误，请重新输入。",
+        password: "账号或密码错误，请重新输入。",
       })
       return
     }
@@ -145,21 +145,16 @@ export function AttendanceLoginDemo() {
           <section className="login-card" aria-labelledby="login-title">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="mb-2 text-xs font-medium tracking-[0.12em] text-emerald-700">员工入口</p>
                 <h2 id="login-title" className="text-[26px] font-semibold tracking-tight text-slate-900">欢迎回来</h2>
                 <p className="mt-2 text-sm text-slate-500">使用员工账号登录考勤系统</p>
               </div>
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><Fingerprint size={23} aria-hidden="true" /></span>
             </div>
 
-            <div className="login-demo-credentials" role="note">
-              <span>演示账号</span><strong>admin</strong><span>密码</span><strong>12345</strong>
-            </div>
-
             <form noValidate onSubmit={handleSubmit}>
               <FieldGroup className="gap-3">
                 <Field data-invalid={Boolean(errors.account)}>
-                  <FieldLabel htmlFor="attendance-account" className="text-xs font-medium text-slate-700">员工工号 / 用户名</FieldLabel>
+                  <FieldLabel htmlFor="attendance-account" className="sr-only">员工工号 / 用户名</FieldLabel>
                   <div className="relative">
                     <UserRound className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
                     <Input
@@ -183,10 +178,7 @@ export function AttendanceLoginDemo() {
                 </Field>
 
                 <Field data-invalid={Boolean(errors.password)}>
-                  <div className="flex items-center justify-between gap-3">
-                    <FieldLabel htmlFor="attendance-password" className="text-xs font-medium text-slate-700">密码</FieldLabel>
-                    <span className="text-[11px] text-slate-400">请妥善保管个人密码</span>
-                  </div>
+                  <FieldLabel htmlFor="attendance-password" className="sr-only">密码</FieldLabel>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
                     <Input
