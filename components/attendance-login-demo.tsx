@@ -58,7 +58,10 @@ export function AttendanceLoginDemo() {
     }
 
     if (account.trim().toLowerCase() !== "admin" || password !== "12345") {
-      setErrors({ account: "账号或密码不正确，请重试。" })
+      setErrors({
+        account: "演示账号或密码不正确，请使用下方提供的登录信息。",
+        password: "演示账号或密码不正确，请使用下方提供的登录信息。",
+      })
       return
     }
 
@@ -182,6 +185,7 @@ export function AttendanceLoginDemo() {
                 <Field data-invalid={Boolean(errors.password)}>
                   <div className="flex items-center justify-between gap-3">
                     <FieldLabel htmlFor="attendance-password" className="text-xs font-medium text-slate-700">密码</FieldLabel>
+                    <span className="text-[11px] text-slate-400">请妥善保管个人密码</span>
                   </div>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
