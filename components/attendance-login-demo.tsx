@@ -58,14 +58,12 @@ export function AttendanceLoginDemo() {
     }
 
     if (account.trim().toLowerCase() !== "admin" || password !== "12345") {
-      setErrors({
-        account: "演示账号或密码不正确，请使用下方提供的登录信息。",
-        password: "演示账号或密码不正确，请使用下方提供的登录信息。",
-      })
+      setErrors({ account: "账号或密码不正确，请重试。" })
       return
     }
 
     setErrors({})
+    window.sessionStorage.setItem("attendance-demo-authenticated", "true")
     router.push("/attendance")
   }
 
@@ -80,23 +78,14 @@ export function AttendanceLoginDemo() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#f4f7f4] text-slate-900">
-      <div className="mx-auto flex min-h-dvh w-full max-w-[1240px] flex-col px-5 py-5 sm:px-8 sm:py-7">
-        <header className="flex items-center justify-between">
-          <a href="/attendance" className="group inline-flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label="返回考勤助手首页">
-            <span className="grid size-11 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-sm"><CalendarCheck2 aria-hidden="true" size={21} /></span>
-            <span className="flex flex-col gap-0.5">
-              <strong className="text-sm font-semibold tracking-wide text-slate-800">考勤助手</strong>
-              <span className="text-[10px] tracking-[0.16em] text-slate-400">EMPLOYEE ATTENDANCE</span>
-            </span>
-          </a>
-          <a href="/attendance" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-white hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-            <ArrowLeft aria-hidden="true" size={15} />返回考勤原型
-          </a>
-        </header>
+    <main className="h5-shell login-shell">
+      <div className="phone-frame login-phone">
+        <div className="login-status-bar" aria-label="手机状态栏"><span>9:41</span><span aria-hidden="true">5G　◉　▰</span></div>
+        <header className="p0-app-header"><span aria-hidden="true" /><h1>考勤打卡（天宇正清）</h1><span aria-hidden="true" /></header>
+        
 
-        <main className="grid flex-1 items-center gap-8 py-6 md:grid-cols-[minmax(0,1fr)_minmax(360px,430px)] md:gap-12 lg:gap-20">
-          <section className="hidden md:block" aria-labelledby="login-intro-title">
+        <div className="login-content">
+          <section className="login-intro" aria-labelledby="login-intro-title">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-emerald-800 shadow-sm">
               <span className="size-1.5 rounded-full bg-emerald-500" />让考勤简单、清晰、有序
             </div>
@@ -150,7 +139,7 @@ export function AttendanceLoginDemo() {
             </div>
           </section>
 
-          <section className="mx-auto w-full max-w-[430px] rounded-[28px] border border-white bg-white p-5 shadow-[0_24px_70px_-34px_rgba(22,66,49,0.24)] sm:p-7" aria-labelledby="login-title">
+          <section className="login-card" aria-labelledby="login-title">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="mb-2 text-xs font-medium tracking-[0.12em] text-emerald-700">员工入口</p>
@@ -160,9 +149,8 @@ export function AttendanceLoginDemo() {
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><Fingerprint size={23} aria-hidden="true" /></span>
             </div>
 
-            <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3.5 py-3 text-xs leading-5 text-amber-900" role="status">
-              <ShieldCheck className="mt-0.5 shrink-0" size={15} aria-hidden="true" />
-              <span>原型模拟登录：账号 <strong>admin</strong>，密码 <strong>12345</strong>。仅供流程演示，不会验证真实身份。</span>
+            <div className="login-demo-credentials" role="note">
+              <span>演示账号</span><strong>admin</strong><span>密码</span><strong>12345</strong>
             </div>
 
             <form noValidate onSubmit={handleSubmit}>
@@ -194,7 +182,6 @@ export function AttendanceLoginDemo() {
                 <Field data-invalid={Boolean(errors.password)}>
                   <div className="flex items-center justify-between gap-3">
                     <FieldLabel htmlFor="attendance-password" className="text-xs font-medium text-slate-700">密码</FieldLabel>
-                    <span className="text-[11px] text-slate-400">请妥善保管个人密码</span>
                   </div>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
@@ -237,19 +224,19 @@ export function AttendanceLoginDemo() {
               </Button>
             </form>
 
-            <div className="my-4 flex items-center gap-3 text-[11px] text-slate-400" aria-hidden="true">
+            <div className="login-alt-methods my-4 flex items-center gap-3 text-[11px] text-slate-400" aria-hidden="true">
               <Separator className="flex-1" /><span>其他登录方式</span><Separator className="flex-1" />
             </div>
 
-            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="h-11 w-full gap-2.5 rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="login-alt-methods h-11 w-full gap-2.5 rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
               <span className="grid size-6 place-items-center rounded-full bg-emerald-600 text-[11px] font-semibold text-white" aria-hidden="true">微</span>
               微信账号登录
             </Button>
             <p className="mt-5 text-center text-xs leading-5 text-slate-400">如无法登录，请联系企业考勤管理员。</p>
           </section>
-        </main>
+        </div>
 
-        <footer className="flex flex-col items-center justify-between gap-2 border-t border-emerald-950/5 pt-4 text-[11px] text-slate-400 sm:flex-row">
+        <footer className="login-page-footer">
           <span>© 2026 考勤助手</span>
           <span className="inline-flex items-center gap-1.5"><UsersRound size={13} aria-hidden="true" />企业员工专用入口</span>
         </footer>
@@ -305,6 +292,6 @@ export function AttendanceLoginDemo() {
           </section>
         </div>
       )}
-    </div>
+    </main>
   )
 }

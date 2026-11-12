@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   ArrowRight,
@@ -189,6 +190,8 @@ function summarize(records: AttendanceRecord[]) {
 }
 
 export function AttendanceH5() {
+  const router = useRouter()
+  const [sessionReady, setSessionReady] = useState(false)
   const today = todayISO()
   const [activeTab, setActiveTab] = useState<Tab>("打卡")
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -221,6 +224,14 @@ export function AttendanceH5() {
   const [locationPermission, setLocationPermission] = useState<LocationPermissionStatus>("idle")
   const [locationPermissionOpen, setLocationPermissionOpen] = useState(false)
   const [pendingLocationAction, setPendingLocationAction] = useState<LocationAction>(null)
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem("attendance-demo-authenticated") !== "true") {
+      router.replace("/")
+      return
+    }
+    setSessionReady(true)
+  }, [router])
 
   useEffect(() => {
     if (!navigator.permissions?.query) return
@@ -378,6 +389,11 @@ export function AttendanceH5() {
     showNotice(`下班卡已更新 · ${time}`)
   }
 
+  const logOut = () => {
+    window.sessionStorage.removeItem("attendance-demo-authenticated")
+    router.replace("/")
+  }
+
   const submitApplication = (kind: ApplicationKind, date: string, detail: string, reason: string) => {
     setApplications((current) => [{ id: `REQ-${Date.now()}`, kind, date, detail, reason, status: "审批中" }, ...current])
     setFormOpen(null)
@@ -386,6 +402,8 @@ export function AttendanceH5() {
     setActiveTab("申请")
     showNotice("申请已提交，当前状态：审批中")
   }
+
+  if (!sessionReady) return null
 
   return <main className="h5-shell">
     <div className="phone-frame">
@@ -424,7 +442,7 @@ export function AttendanceH5() {
         onException={setExceptionRecord}
       />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
-      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onApplications={() => setActiveTab("申请")} />}
+      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onApplications={() => setActiveTab("申请")} onLogout={logOut} />}
 
       <nav className="bottom-nav" aria-label="主导航">
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={activeTab === label ? "nav-active" : ""} aria-current={activeTab === label ? "page" : undefined} onClick={() => setActiveTab(label)}>
@@ -662,10 +680,10 @@ function ApplicationsScreen({ items, filter, setFilter, onRequest }: { items: Ap
   </section>
 }
 
-function ProfileScreen({ onRules, onApplications }: { onRules: () => void; onApplications: () => void }) {
+function ProfileScreen({ onRules, onApplications, onLogout }: { onRules: () => void; onApplications: () => void; onLogout: () => void }) {
   return <section className="page-content subpage"><p className="eyebrow">个人空间</p><h1>我的</h1>
     <section className="p0-profile-card"><div className="avatar">林</div><div><strong>示例员工</strong><span>{employee.department} · {employee.role}</span></div><span className="active-pill">原型数据</span></section>
-    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onApplications}>我的申请<ChevronRight size={17} /></button><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><a href="/login" className="flex items-center justify-between py-3 text-sm font-medium text-[#3f5b4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176b52]">账号与微信登录<ChevronRight size={17} /></a><button type="button" className="p0-disabled-action" disabled>退出登录（尚未登录）<ChevronRight size={17} /></button></div>
+    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onApplications}>我的申请<ChevronRight size={17} /></button><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><a href="/login" className="flex items-center justify-between py-3 text-sm font-medium text-[#3f5b4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176b52]">账号与微信登录<ChevronRight size={17} /></a><button type="button" onClick={onLogout}>退出登录<ChevronRight size={17} /></button></div>
     <div className="p0-card p0-privacy-card"><ShieldCheck size={18} /><div><strong>原型预览</strong><span>员工资料为示例内容；企业微信认证与员工权限尚未接入。</span></div></div>
   </section>
 }
