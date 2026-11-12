@@ -29,7 +29,7 @@ type ViewMode = "日" | "周" | "月"
 type ApplicationKind = "补卡申请" | "请假申请" | "出差申请" | "外出申请" | "加班申请"
 type ApplicationStatus = "审批中" | "已通过" | "已拒绝"
 type AttendanceStatus = "正常" | "迟到" | "早退" | "缺卡" | "待下班打卡" | "休息日" | "未开始"
-type LocationPermissionStatus = "idle" | "requesting" | "granted" | "denied" | "unavailable" | "unsupported"
+type LocationPermissionStatus = "idle" | "requesting" | "granted" | "simulated" | "denied" | "unavailable" | "unsupported"
 type LocationAction = "punch" | "refresh" | null
 type Coordinates = { latitude: number; longitude: number }
 
@@ -73,7 +73,7 @@ const schedule = {
   flexibleMinutes: 30,
 }
 
-const locationFixture = { accuracy: 12, radius: 100 }
+const locationFixture = { radius: 100 }
 const demoFieldAddress = "深圳市南山区科技中一路18号"
 
 const attendanceSites = [
@@ -220,7 +220,6 @@ export function AttendanceH5() {
   const [applicationFilter, setApplicationFilter] = useState("全部")
   const [applications, setApplications] = useState(() => createApplicationRecords(today))
   const [locationPermission, setLocationPermission] = useState<LocationPermissionStatus>("idle")
-  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const [locationPermissionOpen, setLocationPermissionOpen] = useState(false)
   const [pendingLocationAction, setPendingLocationAction] = useState<LocationAction>(null)
 
@@ -235,7 +234,6 @@ export function AttendanceH5() {
         navigator.geolocation.getCurrentPosition(({ coords }) => {
           if (!active) return
           setCurrentCoordinates({ latitude: coords.latitude, longitude: coords.longitude })
-          setLocationAccuracy(Math.round(coords.accuracy))
         }, () => {
           if (active) setLocationPermission("unavailable")
         }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 })
@@ -261,13 +259,15 @@ export function AttendanceH5() {
     setLocationPermission("requesting")
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        setCurrentCoordinates({ latitude: coords.latitude, longitude: coords.longitude })
-        setLocationAccuracy(Math.round(coords.accuracy))
+        const coordinates = { latitude: coords.latitude, longitude: coords.longitude }
+        const nearestSite = findNearestAttendanceSite(coordinates)
+        const isWithinRange = nearestSite !== null && nearestSite.distance <= locationFixture.radius
+        setCurrentCoordinates(coordinates)
         setLocationPermission("granted")
         setLocationPermissionOpen(false)
         setPendingLocationAction(null)
         if (action === "punch") setLocationOpen(true)
-        showNotice("已获取定位权限")
+        showNotice(isWithinRange ? "定位成功，已进入考勤范围" : "定位成功，当前不在考勤范围内")
       },
       (error) => {
         setLocationPermission(error.code === 1 ? "denied" : "unavailable")
@@ -281,6 +281,10 @@ export function AttendanceH5() {
   }
 
   const openAttendancePunch = () => {
+    if (locationPermission === "simulated") {
+      setLocationOpen(true)
+      return
+    }
     if (locationPermission === "granted") requestLocationPermission("punch")
     else {
       setPendingLocationAction("punch")
@@ -294,11 +298,39 @@ export function AttendanceH5() {
   }
 
   const refreshHomeLocation = () => {
-    if (locationPermission === "granted") requestLocationPermission("refresh")
+    if (locationPermission === "simulated") {
+      setPendingLocationAction("refresh")
+      setLocationPermissionOpen(true)
+    } else if (locationPermission === "granted") requestLocationPermission("refresh")
     else {
       setPendingLocationAction("refresh")
       setLocationPermissionOpen(true)
     }
+  }
+
+  const refreshLocationFromSheet = () => {
+    if (locationPermission === "simulated") {
+      setLocationOpen(false)
+      setPendingLocationAction("punch")
+      setLocationPermissionOpen(true)
+    } else {
+      requestLocationPermission("punch")
+    }
+  }
+
+  const simulateLocationScenario = (withinRange: boolean) => {
+    if (process.env.NODE_ENV === "production") return
+    const site = attendanceSites[0]
+    const coordinates = withinRange
+      ? { latitude: site.latitude, longitude: site.longitude }
+      : { latitude: site.latitude + 0.003, longitude: site.longitude }
+    const action = pendingLocationAction
+    setCurrentCoordinates(coordinates)
+    setLocationPermission("simulated")
+    setLocationPermissionOpen(false)
+    setPendingLocationAction(null)
+    setLocationOpen(action === "punch")
+    showNotice(withinRange ? "定位成功，已进入考勤范围" : "定位成功，当前不在考勤范围内")
   }
 
   const openRequest = (kind: ApplicationKind, initialDate?: string) => {
@@ -320,7 +352,7 @@ export function AttendanceH5() {
   const selectedSite = nearestSiteMatch?.site ?? attendanceSites[0]
   const distance = nearestSiteMatch?.distance ?? null
   const isWithinRange = distance !== null && distance <= locationFixture.radius
-  const canPunch = locationPermission === "granted" && isWithinRange
+  const canPunch = (locationPermission === "granted" || locationPermission === "simulated") && isWithinRange
   const visibleApplications = useMemo(() => applications.filter((item) => applicationFilter === "全部" || item.status === applicationFilter), [applications, applicationFilter])
 
   const submitFieldPunch = ({ remark, photoName, address }: { remark: string; photoName: string; address: string }) => {
@@ -330,7 +362,7 @@ export function AttendanceH5() {
   }
 
   const submitPunch = () => {
-    if (locationPermission !== "granted" || distance === null) {
+    if ((locationPermission !== "granted" && locationPermission !== "simulated") || distance === null) {
       setPendingLocationAction("punch")
       setLocationOpen(false)
       setLocationPermissionOpen(true)
@@ -370,7 +402,6 @@ export function AttendanceH5() {
         punchRecords={punchRecords}
         currentCoordinates={currentCoordinates}
         distance={distance}
-        locationAccuracy={locationAccuracy}
         selectedSite={selectedSite}
         locationPermission={locationPermission}
         canPunch={canPunch}
@@ -404,9 +435,9 @@ export function AttendanceH5() {
 
       {loginOpen && <LoginSheet onClose={() => setLoginOpen(false)} />}
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
-      {locationOpen && distance !== null && <LocationSheet site={selectedSite} distance={distance} accuracy={locationAccuracy} onRefresh={() => requestLocationPermission("punch")} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
-      {fieldPunchOpen && <OutdoorPunchSheet address={demoFieldAddress} onClose={() => setFieldPunchOpen(false)} onSubmit={submitFieldPunch} />}
-      {locationPermissionOpen && <LocationPermissionDialog permissionStatus={locationPermission} onRequestPermission={() => requestLocationPermission(pendingLocationAction)} onClose={() => { setLocationPermissionOpen(false); setPendingLocationAction(null) }} />}
+  {locationOpen && distance !== null && <LocationSheet site={selectedSite} distance={distance} onRefresh={refreshLocationFromSheet} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
+  {fieldPunchOpen && <OutdoorPunchSheet address={demoFieldAddress} onClose={() => setFieldPunchOpen(false)} onSubmit={submitFieldPunch} />}
+  {locationPermissionOpen && <LocationPermissionDialog permissionStatus={locationPermission} showDemoScenarios={process.env.NODE_ENV !== "production"} onSimulateLocation={simulateLocationScenario} onRequestPermission={() => requestLocationPermission(pendingLocationAction)} onClose={() => { setLocationPermissionOpen(false); setPendingLocationAction(null) }} />}
       {projectDetailsOpen && <ProjectDetailsSheet site={selectedSite} onClose={() => setProjectDetailsOpen(false)} />}
       {exceptionRecord && <ExceptionSheet record={exceptionRecord} onClose={() => setExceptionRecord(null)} onRequest={openExceptionRequest} />}
       {formOpen && <ApplicationSheet kind={formOpen} today={today} initialDate={formInitialDate} onClose={() => { setFormOpen(null); setFormInitialDate(undefined) }} onSubmit={submitApplication} />}
@@ -420,13 +451,12 @@ function StatusBar({ time }: { time: string }) {
   return <div className="status-bar"><span>{time.slice(0, 5)}</span><div className="status-icons"><span>5G</span><Wifi size={15} /><span className="battery"><i /></span></div></div>
 }
 
-function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, distance, locationAccuracy, locationPermission, selectedSite, canPunch, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onProjectDetails, onOpenRules, onRequestRepair }: {
+function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, distance, locationPermission, selectedSite, canPunch, punchedOut, onPunch, onRefreshLocation, onFieldPunch, onProjectDetails, onOpenRules, onRequestRepair }: {
   today: string
   currentTime: string
   punchRecords: PunchRecord[]
   currentCoordinates: Coordinates | null
   distance: number | null
-  locationAccuracy: number | null
   locationPermission: LocationPermissionStatus
   selectedSite: (typeof attendanceSites)[number]
   canPunch: boolean
@@ -448,7 +478,7 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
         ? "已进入考勤范围"
         : "当前不在考勤范围内"
   const locationDetail = currentCoordinates
-    ? `距离最近考勤点 ${distance}m · 定位精度 ±${locationAccuracy ?? "—"}m`
+    ? `距离最近考勤点 ${distance}m`
     : "点击右侧图标获取当前位置"
   const punchLabel = !record.isWorkingDay
     ? "休息日"
@@ -487,7 +517,7 @@ function HomeScreen({ today, currentTime, punchRecords, currentCoordinates, dist
       <div className={`p0-single-location-state ${distance === null ? "is-neutral" : distance > locationFixture.radius ? "is-outside" : "is-in-range"}`} role="status" aria-live="polite">
         <span className="p0-single-location-icon"><MapPin size={14} /></span>
         <span className="p0-single-location-copy"><strong>{locationLabel}</strong><small>{locationDetail}</small></span>
-        <button type="button" disabled={locationPermission === "requesting"} aria-label={currentCoordinates ? "刷新当前位置" : "获取当前位置"} title={currentCoordinates ? "刷新定位" : "获取定位"} onClick={onRefreshLocation}><RefreshCw size={14} /></button>
+        <button type="button" disabled={locationPermission === "requesting"} aria-label={locationPermission === "simulated" ? "切换定位演示状态" : currentCoordinates ? "刷新当前位置" : "获取当前位置"} title={locationPermission === "simulated" ? "切换定位演示状态" : currentCoordinates ? "刷新定位" : "获取定位"} onClick={onRefreshLocation}><RefreshCw size={14} /></button>
       </div>
 
       <button type="button" className="p0-punch-orb" disabled={!canPunch || !record.isWorkingDay} aria-label={`${punchLabel}，${punchSubtext}`} onClick={onPunch}>
@@ -679,7 +709,7 @@ function OutdoorPunchSheet({ address, onClose, onSubmit }: { address: string; on
   </section></div>
 }
 
-function LocationPermissionDialog({ permissionStatus, onRequestPermission, onClose }: { permissionStatus: LocationPermissionStatus; onRequestPermission: () => void; onClose: () => void }) {
+function LocationPermissionDialog({ permissionStatus, showDemoScenarios, onSimulateLocation, onRequestPermission, onClose }: { permissionStatus: LocationPermissionStatus; showDemoScenarios: boolean; onSimulateLocation: (withinRange: boolean) => void; onRequestPermission: () => void; onClose: () => void }) {
   const permissionMessage = permissionStatus === "denied"
     ? "定位权限未开启，请在浏览器或微信的页面权限设置中允许定位后重试。"
     : permissionStatus === "unsupported"
@@ -688,20 +718,21 @@ function LocationPermissionDialog({ permissionStatus, onRequestPermission, onClo
         ? "暂时无法获取当前位置，请检查设备定位服务后重试。"
         : ""
 
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-permission-title" onClick={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-permission-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-permission-title" onClick={(event) => event.stopPropagation()}>
     <div className="sheet-handle" /><button type="button" className="sheet-close" onClick={onClose} aria-label="关闭定位提示"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">LOCATION PERMISSION</p><h2 id="p0-permission-title">获取定位权限</h2><p className="p0-sheet-description">定位用于核验打卡位置与考勤范围。只会在你获取或刷新定位时读取，不会在后台持续定位。</p>
-    <div className="p0-demo-banner" role="status"><MapPin size={15} /><span><strong>请允许访问设备位置。</strong>浏览器会在你点击下方按钮后申请定位权限。</span></div>
+    <div className="p0-demo-banner" role="status"><MapPin size={15} /><span><strong>{permissionStatus === "simulated" ? "当前使用演示定位。" : "请允许访问设备位置。"}</strong>{permissionStatus === "simulated" ? "可切换范围状态，也可获取设备真实定位。" : "浏览器会在你点击下方按钮后申请定位权限。"}</span></div>
+    {showDemoScenarios && <div className="p0-location-demo"><div className="p0-location-demo-copy"><strong>预览定位状态</strong><span>使用示例坐标，不读取设备位置。</span></div><div className="p0-location-demo-actions" role="group" aria-label="选择演示定位范围"><button type="button" onClick={() => onSimulateLocation(true)}>模拟进入范围</button><button type="button" onClick={() => onSimulateLocation(false)}>模拟未进入范围</button></div></div>}
     {permissionMessage && <div className="p0-rule-warning" role="alert"><CircleAlert size={15} /><span>{permissionMessage}</span></div>}
-    <button type="button" className="p0-primary p0-submit-punch" onClick={onRequestPermission} disabled={permissionStatus === "requesting"}>{permissionStatus === "requesting" ? "正在获取定位" : permissionStatus === "denied" ? "重新获取定位权限" : "获取定位权限"} <ArrowRight size={17} /></button>
+    <button type="button" className="p0-primary p0-submit-punch" onClick={onRequestPermission} disabled={permissionStatus === "requesting"}>{permissionStatus === "requesting" ? "正在获取定位" : permissionStatus === "denied" ? "重新获取定位权限" : permissionStatus === "simulated" ? "获取设备真实定位" : "获取定位权限"} <ArrowRight size={17} /></button>
     <button type="button" className="p0-inline-link p0-refresh-location" onClick={onClose}>暂不，先进入打卡首页</button>
   </section></div>
 }
 
-function LocationSheet({ site, distance, accuracy, onRefresh, onClose, onSubmit }: { site: (typeof attendanceSites)[number]; distance: number; accuracy: number | null; onRefresh: () => void; onClose: () => void; onSubmit: () => void }) {
+function LocationSheet({ site, distance, onRefresh, onClose, onSubmit }: { site: (typeof attendanceSites)[number]; distance: number; onRefresh: () => void; onClose: () => void; onSubmit: () => void }) {
   const isWithinRange = distance <= locationFixture.radius
   return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-location-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button type="button" className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><MapPin size={22} /></div><p className="eyebrow">LOCATION CHECK</p><h2 id="p0-location-title">确认打卡位置</h2><p className="p0-sheet-description">请确认当前定位与考勤地点一致，打卡时间将以服务器记录为准。</p>
     <div className="p0-location-status"><MapPin size={18} /><div><strong>{site.site}</strong><span>{site.address}</span></div><span className={`p0-location-state ${isWithinRange ? "" : "is-outside"}`}>{isWithinRange ? "范围内" : "超出范围"}</span></div>
-    <div className="p0-location-metrics p0-sheet-metrics"><span>定位精度 {accuracy ?? "—"} 米</span><strong>示例距离 {distance}m</strong><span>考勤范围 {locationFixture.radius}m（示例）</span></div>
+    <div className="p0-location-metrics p0-sheet-metrics"><strong>示例距离 {distance}m</strong><span>考勤范围 {locationFixture.radius}m（示例）</span></div>
     <button type="button" className="p0-inline-link p0-refresh-location" onClick={onRefresh}>重新定位 <ArrowRight size={15} /></button>
     {!isWithinRange && <div className="p0-rule-warning" role="status"><CircleAlert size={15} /><span>示例距离 {distance}m，超出示例考勤范围 {locationFixture.radius}m。</span></div>}
     <button type="button" className="p0-primary p0-submit-punch" onClick={onSubmit} disabled={!isWithinRange}>{isWithinRange ? "确认更新下班卡" : "当前无法打卡"} <Check size={17} /></button><p className="p0-disclaimer">距离为示例数据，需配置考勤点坐标。</p>
