@@ -191,7 +191,6 @@ function summarize(records: AttendanceRecord[]) {
 export function AttendanceH5() {
   const today = todayISO()
   const [activeTab, setActiveTab] = useState<Tab>("打卡")
-  const [loginOpen, setLoginOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
   const [fieldPunchOpen, setFieldPunchOpen] = useState(false)
@@ -425,7 +424,7 @@ export function AttendanceH5() {
         onException={setExceptionRecord}
       />}
       {activeTab === "申请" && <ApplicationsScreen items={visibleApplications} filter={applicationFilter} setFilter={setApplicationFilter} onRequest={openRequest} />}
-      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onLogin={() => setLoginOpen(true)} onApplications={() => setActiveTab("申请")} />}
+      {activeTab === "我的" && <ProfileScreen onRules={() => setRulesOpen(true)} onApplications={() => setActiveTab("申请")} />}
 
       <nav className="bottom-nav" aria-label="主导航">
         {navItems.map(({ label, icon: Icon }) => <button key={label} className={activeTab === label ? "nav-active" : ""} aria-current={activeTab === label ? "page" : undefined} onClick={() => setActiveTab(label)}>
@@ -433,7 +432,6 @@ export function AttendanceH5() {
         </button>)}
       </nav>
 
-      {loginOpen && <LoginSheet onClose={() => setLoginOpen(false)} />}
       {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
   {locationOpen && distance !== null && <LocationSheet site={selectedSite} distance={distance} onRefresh={refreshLocationFromSheet} onClose={() => setLocationOpen(false)} onSubmit={submitPunch} />}
   {fieldPunchOpen && <OutdoorPunchSheet address={demoFieldAddress} onClose={() => setFieldPunchOpen(false)} onSubmit={submitFieldPunch} />}
@@ -664,19 +662,12 @@ function ApplicationsScreen({ items, filter, setFilter, onRequest }: { items: Ap
   </section>
 }
 
-function ProfileScreen({ onRules, onLogin, onApplications }: { onRules: () => void; onLogin: () => void; onApplications: () => void }) {
+function ProfileScreen({ onRules, onApplications }: { onRules: () => void; onApplications: () => void }) {
   return <section className="page-content subpage"><p className="eyebrow">个人空间</p><h1>我的</h1>
     <section className="p0-profile-card"><div className="avatar">林</div><div><strong>示例员工</strong><span>{employee.department} · {employee.role}</span></div><span className="active-pill">原型数据</span></section>
-    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onApplications}>我的申请<ChevronRight size={17} /></button><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><button onClick={onLogin}>企业微信登录<ChevronRight size={17} /></button><button type="button" className="p0-disabled-action" disabled>退出登录（尚未登录）<ChevronRight size={17} /></button></div>
+    <div className="p0-profile-list"><div><span>员工编号</span><strong>{employee.employeeId}</strong></div><div><span>所属企业</span><strong>{employee.company}</strong></div><div><span>所在项目</span><strong>{employee.project}</strong></div><button onClick={onApplications}>我的申请<ChevronRight size={17} /></button><button onClick={onRules}>查看打卡规则<ChevronRight size={17} /></button><button onClick={onRules}>考勤地点与权限<ChevronRight size={17} /></button><a href="/login" className="flex items-center justify-between py-3 text-sm font-medium text-[#3f5b4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176b52]">账号与微信登录<ChevronRight size={17} /></a><button type="button" className="p0-disabled-action" disabled>退出登录（尚未登录）<ChevronRight size={17} /></button></div>
     <div className="p0-card p0-privacy-card"><ShieldCheck size={18} /><div><strong>原型预览</strong><span>员工资料为示例内容；企业微信认证与员工权限尚未接入。</span></div></div>
   </section>
-}
-
-function LoginSheet({ onClose }: { onClose: () => void }) {
-  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="bottom-sheet p0-sheet p0-login-sheet" role="dialog" aria-modal="true" aria-labelledby="p0-login-title" onClick={(event) => event.stopPropagation()}><div className="sheet-handle" /><button className="sheet-close" onClick={onClose} aria-label="关闭"><X size={20} /></button><div className="sheet-icon"><ShieldCheck size={22} /></div><p className="eyebrow">员工账号</p><h2 id="p0-login-title">企业微信登录</h2>
-    <div className="p0-login-panel"><div className="p0-wechat-mark">企</div><strong>企业微信身份认证</strong><span>登录后按企业成员身份校验访问权限</span><button className="p0-primary" disabled>企业微信授权暂未接入 <ChevronRight size={16} /></button></div>
-    <p className="p0-disclaimer">当前为界面原型，不会创建登录会话或判定员工权限。</p>
-  </section></div>
 }
 
 function OutdoorPunchSheet({ address, onClose, onSubmit }: { address: string; onClose: () => void; onSubmit: (details: { remark: string; photoName: string; address: string }) => void }) {
