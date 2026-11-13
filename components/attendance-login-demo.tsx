@@ -169,7 +169,7 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入工号或用户名"
                       value={account}
                       aria-invalid={Boolean(errors.account)}
-                      style={{ fontSize: "14px" }}
+                      style={{ fontSize: "13px" }}
                       onChange={(event) => {
                         setAccount(event.target.value)
                         setErrors((current) => ({ ...current, account: undefined }))
@@ -194,7 +194,7 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入密码"
                       value={password}
                       aria-invalid={Boolean(errors.password)}
-                      style={{ fontSize: "14px" }}
+                      style={{ fontSize: "13px" }}
                       onChange={(event) => {
                         setPassword(event.target.value)
                         setErrors((current) => ({ ...current, password: undefined }))
