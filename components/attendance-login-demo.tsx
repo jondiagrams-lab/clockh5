@@ -11,6 +11,7 @@ import {
   EyeOff,
   LockKeyhole,
   MapPin,
+  MessageCircle,
   ShieldCheck,
   UserRound,
   UsersRound,
@@ -148,17 +149,17 @@ export function AttendanceLoginDemo() {
           </section>
 
           <section className="login-card" aria-labelledby="login-title">
-            <div className="mb-8">
+            <div className="mb-5">
               <div>
-                <h2 id="login-title" className="text-lg font-semibold text-slate-900">账号登录</h2>
-                <p className="mt-1 text-sm text-slate-500">使用员工账号登录考勤系统</p>
+                <h2 id="login-title" className="text-2xl font-semibold leading-8 text-slate-900">账号登录</h2>
+                <p className="mt-1 text-[13px] leading-5 text-slate-500">使用员工账号登录考勤系统</p>
               </div>
             </div>
 
             <form noValidate onSubmit={handleSubmit}>
               <FieldGroup className="gap-3">
                 <Field data-invalid={Boolean(errors.account)}>
-                  <FieldLabel htmlFor="attendance-account" className="sr-only">员工工号 / 用户名</FieldLabel>
+                  <FieldLabel htmlFor="attendance-account" className="text-[13px] font-medium text-slate-600">员工工号 / 用户名</FieldLabel>
                   <div className="relative">
                     <UserRound className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
                     <Input
@@ -169,13 +170,13 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入工号或用户名"
                       value={account}
                       aria-invalid={Boolean(errors.account)}
-                      style={{ fontSize: "13px" }}
+                      style={{ fontSize: "14px" }}
                       onChange={(event) => {
                         setAccount(event.target.value)
                         setErrors((current) => ({ ...current, account: undefined }))
                         setFormMessage("")
                       }}
-                      className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 text-sm shadow-none placeholder:text-slate-400 focus-visible:bg-white"
+                      className="h-12 rounded-lg border-slate-200 bg-white pl-10 text-sm shadow-none placeholder:text-slate-400 focus-visible:bg-white"
                     />
                   </div>
                   {errors.account && <FieldError className="text-xs">{errors.account}</FieldError>}
@@ -183,7 +184,7 @@ export function AttendanceLoginDemo() {
                 </Field>
 
                 <Field data-invalid={Boolean(errors.password)}>
-                  <FieldLabel htmlFor="attendance-password" className="sr-only">密码</FieldLabel>
+                  <FieldLabel htmlFor="attendance-password" className="text-[13px] font-medium text-slate-600">密码</FieldLabel>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
                     <Input
@@ -194,19 +195,19 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入密码"
                       value={password}
                       aria-invalid={Boolean(errors.password)}
-                      style={{ fontSize: "13px" }}
+                      style={{ fontSize: "14px" }}
                       onChange={(event) => {
                         setPassword(event.target.value)
                         setErrors((current) => ({ ...current, password: undefined }))
                         setFormMessage("")
                       }}
-                      className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 pr-12 text-sm shadow-none placeholder:text-slate-400 focus-visible:bg-white"
+                      className="h-12 rounded-lg border-slate-200 bg-white pl-10 pr-12 text-sm shadow-none placeholder:text-slate-400 focus-visible:bg-white"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1.5 top-1/2 size-9 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      className="absolute right-0.5 top-1/2 size-11 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                       onClick={() => setPasswordVisible((visible) => !visible)}
                       aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
                       aria-pressed={passwordVisible}
@@ -221,17 +222,17 @@ export function AttendanceLoginDemo() {
 
               {formMessage && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900" role="alert">{formMessage}</p>}
 
-              <Button type="submit" size="lg" className="mt-4 h-11 w-full rounded-xl text-sm font-semibold shadow-sm">
+              <Button type="submit" size="lg" className="mt-6 h-12 w-full rounded-lg text-sm font-semibold shadow-none">
                 登录考勤系统<ArrowRight data-icon="inline-end" aria-hidden="true" />
               </Button>
             </form>
 
-            <div className="login-alt-methods my-4 flex items-center gap-3 text-[11px] text-slate-400" aria-hidden="true">
+            <div className="login-alt-methods my-5 flex items-center gap-3 text-xs text-slate-400" aria-hidden="true">
               <Separator className="flex-1" /><span>其他登录方式</span><Separator className="flex-1" />
             </div>
 
-            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="login-alt-methods h-11 w-full gap-2.5 rounded-[2px] border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <span className="grid size-6 place-items-center rounded-full bg-emerald-600 text-[11px] font-semibold text-white" aria-hidden="true">微</span>
+            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="login-alt-methods h-12 w-full gap-2 rounded-lg border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <MessageCircle size={17} className="text-emerald-700" aria-hidden="true" />
               微信一键登录
             </Button>
             <p className="mt-5 text-center text-xs leading-5 text-slate-400">如无法登录，请联系企业考勤管理员。</p>
@@ -254,18 +255,18 @@ export function AttendanceLoginDemo() {
             if (event.target === event.currentTarget) setWechatOpen(false)
           }}
         >
-          <section className="relative max-h-[85dvh] w-full max-w-[390px] overflow-y-auto rounded-[2px] border border-[#D4D7D8] bg-white p-6 shadow-none sm:p-7" role="dialog" aria-modal="true" aria-labelledby="wechat-dialog-title">
+          <section className="relative max-h-[85dvh] w-full max-w-[390px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-[0_16px_48px_rgba(15,23,42,0.16)] sm:p-7" role="dialog" aria-modal="true" aria-labelledby="wechat-dialog-title">
             <Button type="button" variant="ghost" size="icon" className="absolute right-4 top-4 text-slate-400" onClick={() => setWechatOpen(false)} aria-label="关闭微信账号选择">
               <X aria-hidden="true" />
             </Button>
-            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-[2px] bg-emerald-50 text-emerald-700"><UsersRound size={22} aria-hidden="true" /></div>
+            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><UsersRound size={22} aria-hidden="true" /></div>
             <div className="text-center">
               <h2 id="wechat-dialog-title" className="text-lg font-semibold text-slate-900">微信授权登录</h2>
               <p className="mt-1.5 text-xs leading-5 text-slate-500">选择用于考勤系统的微信账号</p>
             </div>
 
             {!otherWechat ? (
-              <div className="mt-6 rounded-[2px] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
                 <div className="flex items-center gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800">微</span>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -282,7 +283,7 @@ export function AttendanceLoginDemo() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-6 rounded-[2px] border border-slate-200 bg-slate-50/70 p-5 text-center">
+              <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50/70 p-5 text-center">
                 <span className="mx-auto grid size-11 place-items-center rounded-full bg-slate-100 text-slate-600"><UserRound size={20} aria-hidden="true" /></span>
                 <strong className="mt-3 block text-sm font-medium text-slate-800">切换微信账号</strong>
                 <p className="mt-2 text-xs leading-5 text-slate-500">正式接入微信公众号授权后，可在微信中切换并确认要使用的账号。</p>
