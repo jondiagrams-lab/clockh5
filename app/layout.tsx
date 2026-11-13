@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './login-preview.css'
 
 export const metadata: Metadata = {
   title: '考勤助手 · 员工 H5',

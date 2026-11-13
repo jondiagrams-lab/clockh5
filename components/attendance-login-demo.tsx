@@ -9,7 +9,6 @@ import {
   Check,
   Eye,
   EyeOff,
-  Fingerprint,
   LockKeyhole,
   MapPin,
   ShieldCheck,
@@ -57,7 +56,7 @@ export function AttendanceLoginDemo() {
       return
     }
 
-    if (account.trim().toLowerCase() !== "admin" || password !== "12345") {
+    if (account.trim().toLowerCase() !== "admin" || password !== "123456") {
       setErrors({
         account: "账号或密码错误，请重新输入。",
         password: "账号或密码错误，请重新输入。",
@@ -84,7 +83,13 @@ export function AttendanceLoginDemo() {
     <main className="h5-shell login-shell">
       <div className="phone-frame login-phone">
         <div className="login-status-bar" aria-label="手机状态栏"><span>9:41</span><span aria-hidden="true">5G　◉　▰</span></div>
-        <header className="p0-app-header"><span aria-hidden="true" /><h1>考勤打卡（天宇正清）</h1><span aria-hidden="true" /></header>
+        <header className="p0-app-header">
+          <button type="button" className="p0-app-back" onClick={() => router.back()} aria-label="返回上一页">
+            <ArrowLeft size={20} aria-hidden="true" />
+          </button>
+          <h1>考勤打卡（天宇正清）</h1>
+          <span aria-hidden="true" />
+        </header>
         
 
         <div className="login-content">
@@ -143,12 +148,11 @@ export function AttendanceLoginDemo() {
           </section>
 
           <section className="login-card" aria-labelledby="login-title">
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="mb-8">
               <div>
-                <h2 id="login-title" className="text-[26px] font-semibold tracking-tight text-slate-900">欢迎回来</h2>
-                <p className="mt-2 text-sm text-slate-500">使用员工账号登录考勤系统</p>
+                <h2 id="login-title" className="text-lg font-semibold text-slate-900">账号登录</h2>
+                <p className="mt-1 text-sm text-slate-500">使用员工账号登录考勤系统</p>
               </div>
-              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><Fingerprint size={23} aria-hidden="true" /></span>
             </div>
 
             <form noValidate onSubmit={handleSubmit}>
@@ -165,6 +169,7 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入工号或用户名"
                       value={account}
                       aria-invalid={Boolean(errors.account)}
+                      style={{ fontSize: "14px" }}
                       onChange={(event) => {
                         setAccount(event.target.value)
                         setErrors((current) => ({ ...current, account: undefined }))
@@ -189,6 +194,7 @@ export function AttendanceLoginDemo() {
                       placeholder="请输入密码"
                       value={password}
                       aria-invalid={Boolean(errors.password)}
+                      style={{ fontSize: "14px" }}
                       onChange={(event) => {
                         setPassword(event.target.value)
                         setErrors((current) => ({ ...current, password: undefined }))
@@ -224,9 +230,9 @@ export function AttendanceLoginDemo() {
               <Separator className="flex-1" /><span>其他登录方式</span><Separator className="flex-1" />
             </div>
 
-            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="login-alt-methods h-11 w-full gap-2.5 rounded-xl border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <Button type="button" variant="outline" size="lg" onClick={openWechat} className="login-alt-methods h-11 w-full gap-2.5 rounded-[2px] border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50">
               <span className="grid size-6 place-items-center rounded-full bg-emerald-600 text-[11px] font-semibold text-white" aria-hidden="true">微</span>
-              微信账号登录
+              微信一键登录
             </Button>
             <p className="mt-5 text-center text-xs leading-5 text-slate-400">如无法登录，请联系企业考勤管理员。</p>
           </section>
@@ -240,23 +246,26 @@ export function AttendanceLoginDemo() {
 
       {wechatOpen && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 backdrop-blur-[3px]"
+          className="fixed inset-0 z-50 grid place-items-center bg-[#2D404C]/50 p-4"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setWechatOpen(false)
+          }}
           onClick={(event) => {
             if (event.target === event.currentTarget) setWechatOpen(false)
           }}
         >
-          <section className="relative w-full max-w-[390px] rounded-[26px] border border-white/80 bg-white p-6 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="wechat-dialog-title">
+          <section className="relative max-h-[85dvh] w-full max-w-[390px] overflow-y-auto rounded-[2px] border border-[#D4D7D8] bg-white p-6 shadow-none sm:p-7" role="dialog" aria-modal="true" aria-labelledby="wechat-dialog-title">
             <Button type="button" variant="ghost" size="icon" className="absolute right-4 top-4 text-slate-400" onClick={() => setWechatOpen(false)} aria-label="关闭微信账号选择">
               <X aria-hidden="true" />
             </Button>
-            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><Fingerprint size={22} aria-hidden="true" /></div>
+            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-[2px] bg-emerald-50 text-emerald-700"><UsersRound size={22} aria-hidden="true" /></div>
             <div className="text-center">
-              <h2 id="wechat-dialog-title" className="text-lg font-semibold text-slate-900">微信账号登录</h2>
+              <h2 id="wechat-dialog-title" className="text-lg font-semibold text-slate-900">微信授权登录</h2>
               <p className="mt-1.5 text-xs leading-5 text-slate-500">选择用于考勤系统的微信账号</p>
             </div>
 
             {!otherWechat ? (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mt-6 rounded-[2px] border border-slate-200 bg-slate-50/70 p-4">
                 <div className="flex items-center gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800">微</span>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -273,7 +282,7 @@ export function AttendanceLoginDemo() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 text-center">
+              <div className="mt-6 rounded-[2px] border border-slate-200 bg-slate-50/70 p-5 text-center">
                 <span className="mx-auto grid size-11 place-items-center rounded-full bg-slate-100 text-slate-600"><UserRound size={20} aria-hidden="true" /></span>
                 <strong className="mt-3 block text-sm font-medium text-slate-800">切换微信账号</strong>
                 <p className="mt-2 text-xs leading-5 text-slate-500">正式接入微信公众号授权后，可在微信中切换并确认要使用的账号。</p>
