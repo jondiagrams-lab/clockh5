@@ -1,0 +1,69 @@
+- generic [active] [ref=f3e1]:
+  - button "Open Next.js Dev Tools" [ref=f3e44] [cursor=pointer]
+  - alert [ref=f3e48]
+  - main [ref=f3e51]:
+    - generic [ref=f3e52]:
+      - generic [ref=f3e53]:
+        - generic [ref=f3e54]: 16:29
+        - generic [ref=f3e55]: 5G
+      - heading "考勤打卡（天宇正清）" [level=1] [ref=f3e67]
+      - region "考勤打卡" [ref=f3e69]:
+        - generic [ref=f3e70]:
+          - generic [ref=f3e71]:
+            - generic [ref=f3e76]:
+              - strong [ref=f3e77]: 集团总部大厦（A座）
+              - generic [ref=f3e78]: 深圳市南山区科技中一路18号
+            - button "查看打卡规则" [ref=f3e79] [cursor=pointer]: 打卡规则
+          - generic [ref=f3e83]:
+            - generic [ref=f3e84]: 班次 09:00–18:00
+            - button "查看项目详情：中核2026年人力外包项目" [ref=f3e85] [cursor=pointer]:
+              - generic [ref=f3e90]: 中核2026年人力外包项目
+        - generic [ref=f3e91]:
+          - time [ref=f3e92]: 16:29:23
+          - time [ref=f3e93]: 2026年11月12日星期四
+        - status [ref=f3e94]:
+          - generic [ref=f3e99]:
+            - strong [ref=f3e100]: 尚未获取定位
+            - generic [ref=f3e101]: 点击右侧图标获取当前位置
+          - button "获取当前位置" [ref=f3e102] [cursor=pointer]
+        - button "等待定位，请先获取当前位置" [disabled] [ref=f3e108]:
+          - strong [ref=f3e112]: 等待定位
+          - generic [ref=f3e113]: 请先获取当前位置
+        - button "外勤打卡" [ref=f3e115] [cursor=pointer]
+        - generic [ref=f3e119]:
+          - generic [ref=f3e120]:
+            - heading "今日打卡记录" [level=2] [ref=f3e121]
+            - generic [ref=f3e122]: 共 3 条
+          - generic [ref=f3e123]:
+            - article [ref=f3e124]:
+              - generic [ref=f3e125]: 下
+              - generic [ref=f3e126]:
+                - strong [ref=f3e127]:
+                  - text: 下班打卡
+                  - time [ref=f3e128]: 11:51:20
+                - generic [ref=f3e129]: 集团总部大厦（A座）
+              - generic [ref=f3e133]: 早退
+            - article [ref=f3e134]:
+              - generic [ref=f3e135]: 下
+              - generic [ref=f3e136]:
+                - strong [ref=f3e137]:
+                  - text: 下班打卡
+                  - time [ref=f3e138]: 11:51:16
+                - generic [ref=f3e139]: 集团总部大厦（A座）
+              - generic [ref=f3e143]: 早退
+            - article [ref=f3e144]:
+              - generic [ref=f3e145]: 上
+              - generic [ref=f3e146]:
+                - strong [ref=f3e147]:
+                  - text: 上班打卡
+                  - time [ref=f3e148]: 08:52:14
+                - generic [ref=f3e149]: 集团总部大厦（A座）
+              - generic [ref=f3e153]: 正常
+          - generic [ref=f3e154]:
+            - generic [ref=f3e155]: 忘记打卡？
+            - button "申请补卡" [ref=f3e156] [cursor=pointer]
+      - navigation "主导航" [ref=f3e159]:
+        - button "打卡" [ref=f3e160] [cursor=pointer]
+        - button "日历" [ref=f3e165] [cursor=pointer]
+        - button "申请" [ref=f3e169] [cursor=pointer]
+        - button "我的" [ref=f3e174] [cursor=pointer]
